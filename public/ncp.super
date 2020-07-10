@@ -1,0 +1,65 @@
+<script>
+    // require jszip
+    this.state = 0;
+    this.error = null;
+    if("props" in this) {
+        if("data" in this.props) {
+            // expected blob of the zip
+            this.state = 1;
+        } else {
+            this.state = -2;
+        }
+    } else {
+        this.state = -1;
+    }
+    this.zip = await JSZip.loadAsync(this.props.data);
+    var result = await this.zip.file("spec.json").async("string");
+    this.spec = JSON.parse(result);
+    this.ui = [];
+    var version = this.spec.version;
+    if(version[0] == 0) {
+        if(version[1] == 0) {
+            if(version[2] == 1) {
+
+                if( this.spec.type == "audio.webm" ) {
+                    this.ui.push(`<audio id="control" controls></audio>`)
+                } else if(this.spec.type == "video.webm") {
+                    this.ui.push(`<video id="control" controls></video>`);
+                }
+
+            } else {
+                this.error = new Error("NCP Version not found.");
+            }
+        } else {
+            this.error = new Error("NCP Version not found.");
+        }
+    } else {
+        this.error = new Error("NCP Version not found.");
+    }
+</script>
+<Component id="holder">
+    {{this.ui.join("")}}
+</Component>
+<script>
+    var version = this.spec.version;
+    if(version[0] == 0) {
+        if(version[1] == 0) {
+            if(version[2] == 1) {
+                if( this.spec.type == "audio.webm" ) {
+                    var content_blob = await this.zip.file("data.webm").async("blob");
+                    control.el.src = window.URL.createObjectURL(content_blob);
+                } else if(this.spec.type == "video.webm") {
+                    var content_blob = await this.zip.file("data.webm").async("blob");
+                    control.el.src = window.URL.createObjectURL(content_blob);
+                }
+            }
+        }
+    }
+
+    this.module.exports = {
+        holder,
+        control,
+        spec : this.spec,
+        error:this.error
+    }
+</script>

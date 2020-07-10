@@ -637,8 +637,7 @@ btnPlay.el.addEventListener("click",()=>{
 });
 btnDownloadMovie.el.addEventListener("click",()=>{ download(); });
 
-
-btnSend.el.addEventListener("click",async ()=>{
+async function makeNcpBlob(blobs) {
     var blob,type;
     if(self.app.video.mode=="none") {
         blob = new Blob(recordedBlobs, {type: 'audio/webm'});
@@ -651,9 +650,14 @@ btnSend.el.addEventListener("click",async ()=>{
     zip.file("data.webm", blob);
     zip.file("spec.json", JSON.stringify({
         version : [0,0,1],
-        type : type
+        type : type,
+        main : "data.webm"
     }));
-    var nblob = await zip.generateAsync({type:"blob"});
+    return await zip.generateAsync({type:"blob"});
+}
+
+btnSend.el.addEventListener("click",async ()=>{
+    var nblob = await makeNcpBlob(recordedBlobs);
     Import({url:"/send",method:"POST",type:Import.Binary,data : nblob })
     .done((data)=>{
         console.log(data);
@@ -680,47 +684,29 @@ async function addItem(item) {
     schema1.el.item.addEventListener("click",async ()=>{
         if(!visible) {
             if(!itemStruct.init) {
-                
                 var data = await fetch(`/messages/user1/${item.file}.ncp`);
                 var blob = await data.blob();
-                var zip = await JSZip.loadAsync(blob);
-                var result = await zip.file("spec.json").async("string");
-                var spec = JSON.parse(result);
-
-                if( spec.type == "audio.webm" ) {
-                    var schema2 = await schema1.$.holder.elementPushPacketAsync(`
-                        <tr id="view">
-                            <td colspan="4" align="center">
-                                <audio id="control" controls></audio>
-                                <div id="sc"></div>
-                            </td>
-                        </tr>
-                    `);
-                    var content_blob = await zip.file("data.webm").async("blob");
-                    schema2.el.control.src = window.URL.createObjectURL(content_blob);
-                    schema2.el.control.play();
-                    itemStruct.schema2 = schema2;
-                    schema2.el.sc.scrollIntoView({block:"center"});
-                } else if(spec.type == "video.webm") {
-                    var schema2 = await schema1.$.holder.elementPushPacketAsync(`
-                        <tr id="view">
-                            <td colspan="4" align="center">
-                                <video id="control" controls></video>
-                                <div id="sc"></div>
-                            </td>
-                        </tr>
-                    `);
-                    var content_blob = await zip.file("data.webm").async("blob");
-                    schema2.el.control.src = window.URL.createObjectURL(content_blob);
-                    schema2.el.control.play();
-                    itemStruct.schema2 = schema2;
-                    schema2.el.control.style.width = "100%";
-                    schema2.el.control.style.marginBottom = "-7px";
-                    schema2.el.sc.scrollIntoView({block:"center"});
+                var schema2 = await schema1.$.holder.elementPushPacketAsync(`
+                    <tr id="view">
+                        <td colspan="4" align="center">
+                            <Component id="ncp" src="ncp.super" data={{this.src}}></Component>
+                            <div id="sc"></div>
+                        </td>
+                    </tr>
+                `,{context:{src:blob}});
+                itemStruct.schema2 = schema2;
+                schema2.el.sc.scrollIntoView({block:"center"});
+                schema2.exports.ncp.control.el.play();
+                if( schema2.exports.ncp.spec.type == "audio.webm" ) {
+                    
+                } else if(schema2.exports.ncp.spec.type == "video.webm") { // video tag, expecting bad margin, 100% width is custom
+                    schema2.exports.ncp.control.el.style.width = "100%";
+                    schema2.exports.ncp.control.el.style.marginBottom = "-7px";
                 }
             } else {
                 itemStruct.schema2.el.view.style.display = "";
                 itemStruct.schema2.el.sc.scrollIntoView({block:"center"});
+                itemStruct.schema2.exports.ncp.control.el.play();
             }
             itemStruct.init = true;
             visible = true;
