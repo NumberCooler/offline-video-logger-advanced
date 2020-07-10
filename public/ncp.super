@@ -1,5 +1,6 @@
 <script>
     // require jszip
+    var self = this;
     this.state = 0;
     this.error = null;
     if("props" in this) {
@@ -36,6 +37,11 @@
     } else {
         this.error = new Error("NCP Version not found.");
     }
+    if(this.error) {
+        this.module.exports = {
+            error : this.error
+        }
+    }
 </script>
 <Component id="holder">
     {{this.ui.join("")}}
@@ -55,7 +61,7 @@
             }
         }
     }
-
+    
     this.module.exports = {
         holder,
         control,
