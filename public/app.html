@@ -638,16 +638,23 @@ btnPlay.el.addEventListener("click",()=>{
 btnDownloadMovie.el.addEventListener("click",()=>{ download(); });
 
 
-btnSend.el.addEventListener("click",()=>{
+btnSend.el.addEventListener("click",async ()=>{
     var blob,type;
     if(self.app.video.mode=="none") {
         blob = new Blob(recordedBlobs, {type: 'audio/webm'});
-        type = "audio_webm";
+        type = "audio.webm";
     } else {
         blob = new Blob(recordedBlobs, {type: 'video/webm'});
-        type = "video_webm";
+        type = "video.webm";
     }
-    Import({url:"/send?type="+type,method:"POST",type:Import.Binary,data : blob })
+    var zip = new JSZip();
+    zip.file("data.webm", blob);
+    zip.file("spec.json", JSON.stringify({
+        version : [0,0,1],
+        type : type
+    }));
+    var nblob = await zip.generateAsync({type:"blob"});
+    Import({url:"/send",method:"POST",type:Import.Binary,data : nblob })
     .done((data)=>{
         console.log(data);
         refresh_list();
@@ -665,7 +672,7 @@ async function addItem(item) {
         <tr id="item" style="cursor:pointer;">
             <td>📼 ${item.id}</td>
             <td>📅 ${item.date}</td>
-            <td>🔽<a href="/messages/user1/${item.file}.webm" download>download</a></td>
+            <td>🔽<a href="/messages/user1/${item.file}.ncp" download>download</a></td>
         </tr>
         <Component id="holder"></Component>
     `);
@@ -673,32 +680,42 @@ async function addItem(item) {
     schema1.el.item.addEventListener("click",async ()=>{
         if(!visible) {
             if(!itemStruct.init) {
-                if( item.file.indexOf(".audio") == ( item.file.length - ".audio".length ) ) {
+                
+                var data = await fetch(`/messages/user1/${item.file}.ncp`);
+                var blob = await data.blob();
+                var zip = await JSZip.loadAsync(blob);
+                var result = await zip.file("spec.json").async("string");
+                var spec = JSON.parse(result);
+
+                if( spec.type == "audio.webm" ) {
                     var schema2 = await schema1.$.holder.elementPushPacketAsync(`
                         <tr id="view">
                             <td colspan="4" align="center">
-                                <audio id="control" controls>
-                                    <source src={{this.file}} type="audio/webm">
-                                </audio>
+                                <audio id="control" controls></audio>
                                 <div id="sc"></div>
                             </td>
                         </tr>
-                    `,{context:{file:`/messages/user1/${item.file}.webm`}});
+                    `);
+                    var content_blob = await zip.file("data.webm").async("blob");
+                    schema2.el.control.src = window.URL.createObjectURL(content_blob);
                     schema2.el.control.play();
                     itemStruct.schema2 = schema2;
-                } else {
+                    schema2.el.sc.scrollIntoView({block:"center"});
+                } else if(spec.type == "video.webm") {
                     var schema2 = await schema1.$.holder.elementPushPacketAsync(`
                         <tr id="view">
                             <td colspan="4" align="center">
-                                <video id="control" src={{this.file}} controls></video>
+                                <video id="control" controls></video>
                                 <div id="sc"></div>
                             </td>
                         </tr>
-                    `,{context:{file:`/messages/user1/${item.file}.webm`}});
+                    `);
+                    var content_blob = await zip.file("data.webm").async("blob");
+                    schema2.el.control.src = window.URL.createObjectURL(content_blob);
                     schema2.el.control.play();
+                    itemStruct.schema2 = schema2;
                     schema2.el.control.style.width = "100%";
                     schema2.el.control.style.marginBottom = "-7px";
-                    itemStruct.schema2 = schema2;
                     schema2.el.sc.scrollIntoView({block:"center"});
                 }
             } else {

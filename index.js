@@ -80,7 +80,7 @@ app.post("/send",(req,res)=>{
 	req.on("data",(chunk)=>{
         body.push(chunk);
         total += chunk.length;
-        if(total > 1000000) { // ~ 1min 30s de gravação
+        if(total > 500000000) { // ~ 1min 30s de gravação
             req.connection.destroy();
             error = true;
         }
@@ -109,19 +109,9 @@ app.post("/send",(req,res)=>{
                 var buffer = Buffer.from(c);
                 var id = genId("msg");
                 var filename = id;
-                var format = "";
-
-                if(req.query.type == "audio_webm") {
-                    format = ".audio";
-                }
-                if(req.query.type == "video_webm") {
-                    format = ".video";
-                }
-
-                while(fs.existsSync("./public/messages/user1/"+id+format+".webm")) {
+                while(fs.existsSync("./public/messages/user1/"+id+".ncp")) {
                     id = genId("msg");
                 }
-
                 var connection = mysql.createConnection(config.connection);
                 var maxid = await new Promise((resolve,reject)=>{
                     connection.query(
@@ -137,18 +127,16 @@ app.post("/send",(req,res)=>{
                 });
                 if(maxid == null) maxid = 0;
                 //console.log("MAXID",maxid);
-
                 num = {
                     id : maxid+1,
                     user : 1,
                     state : 1,
                     mode : 1
                 };
-
                 text = {
                     date : convert_date(new Date()),
                     comment : "",
-                    file : id+format
+                    file : id
                 };
                 for(var key in text) {
                     text[key] = validString(text[key]);
@@ -163,7 +151,8 @@ app.post("/send",(req,res)=>{
                         resolve(results);
                     });
                 });
-                fs.writeFileSync("./public/messages/user1/"+id+format+".webm",buffer,"binary");
+                fs.writeFileSync("./public/messages/user1/"+id+".ncp",buffer,"binary");
+                // ncp stands for number cooler product
                 res.json({result:true});
                 return;
             } catch(e) {

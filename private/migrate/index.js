@@ -103,7 +103,6 @@ program.parse(process.argv);
 process.on('uncaughtException', function (err) {
     connection_fail = true;
     console.log("ERRO!");
-    //console.log(err);
 });
 
 try {
