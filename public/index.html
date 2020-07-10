@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+    <head>
+		<meta charset="utf-8"/>
+		<script src="/js/import.js"></script>
+		<script src="/js/core.js"></script>
+		
+        <style>
+            * {
+                font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+            }
+        </style>
+        <script>
+            UI.init(async ()=>{
+				var self = this;
+				var fail = false;
+                var schema = await UI.Body.elementPushPacketAsync(`
+					<Component id="recorder" src="/app.html" fail={{this.fail}}></Component>
+				`,{context:{fail:()=>{
+					console.log("OK");
+					fail = true;
+				}}});
+				//if(fail) UI.Body.elementsClear();
+			});
+
+        </script>
+    </head>
+    <body>
+    </body>
+</hmtl>

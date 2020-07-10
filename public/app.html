@@ -1,0 +1,732 @@
+<script>
+    this.fail = false;
+    var self = this;
+    try {
+        var a = await fetch("/ping",{method:"POST"});
+        if(a.status==404) {
+            this.fail = true;
+            self.props.fail();
+        }
+    } catch(e) {
+        this.fail = true;
+        self.props.fail();
+    }
+</script>
+<style>
+    body {
+        margin:0px;
+    }
+</style>
+<div style="display:flex;background-color:navy;color:white;padding:10px;">
+    <div>🧊 NumberCooler Recorder</div>
+</div>
+<div id="main" style="display:flex;padding:0px;border-left:solid 10px navy;border-right:solid 10px navy;">
+    <div id="listPanel" style="flex:0.6;overflow:auto;">
+        <div id="listPanelMock"></div>
+        <table border="1" width="100%" cellpadding="0" cellspacing="0">
+            <Component id="list"></Component>
+        </table>
+        <Component id="message"></Component>
+        <div style="height:40px;"></div>
+    </div>
+    <div style="width:5px;background-color:navy;"></div>
+    <div id="mainPanel" style="flex:1;padding:20px;overflow:auto;">
+        <div id="lblSettings" style="cursor:pointer;">🔧 Input Settings</div>
+        <div id="settingsPanel" style="padding-left:20px;">
+            <div>
+                <div>Audio</div>
+                <div style="padding-left:20px;">
+                    <div>
+                        none
+                        <button id="btnSetAudioNone">set</button>
+                    </div>
+                    <div>
+                        microphone
+                        <select id="mic_devices"></select>
+                        <button id="btnSetMic">set</button>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <div>Video</div>
+                <div style="padding-left:20px;">
+                    <div>
+                        none
+                        <button id="btnSetVideoNone">set</button>
+                    </div>
+                    <div>
+                        screen
+                        <button id="btnSetScreen">set</button>
+                    </div>
+                    <div>
+                        camera
+                        <select id="video_devices"></select>
+                        <button id="btnSetCamera">set</button>
+                    </div>
+                    <div>
+                        canvas
+                        <button id="btnSetCanvas">set</button>
+                    </div>
+                </div>
+            </div>
+            <div style="height:40px;"></div>
+        </div>
+        
+        <div>🎬 Stage</div>
+        <div>
+            <button id="btnRecord">Start Recording</button>
+            <button id="btnPlay">play</button>
+            <button id="btnDownloadMovie">download movie</button>
+            <button id="btnDownloadPicture">download picture</button>
+            <button id="btnNext">change canvas</button>
+        </div>
+        <div>
+            <button id="btnSend">save</button>
+        </div>
+        <div style="display:flex;padding-top:10px;padding-bottom:10px;">
+            <div id="chkMic" style="display:none;padding:5px;background-color:gainsboro;border-radius:20px;padding-left:15px;padding-right:15px;margin-right:10px;">🔴 Mic</div>
+            <div id="chkScreen" style="display:none;padding:5px;background-color:gainsboro;border-radius:20px;padding-left:15px;padding-right:15px;margin-right:10px;">🔴 Screen</div>
+            <div id="chkCamera" style="display:none;padding:5px;background-color:gainsboro;border-radius:20px;padding-left:15px;padding-right:15px;margin-right:10px;">🔴 Camera</div>
+            <div id="chkCanvas" style="display:none;padding:5px;background-color:gainsboro;border-radius:20px;padding-left:15px;padding-right:15px;margin-right:10px;">🔴 Canvas</div>
+        </div>
+        <div id="mockHolder"></div>
+        <div>
+            <Component id="mic_holder"></Component>
+            <Component id="mic_holder2"></Component>
+            <Component id="camera_holder"></Component>
+            <canvas id="canvas_screen"></canvas>
+        </div>
+        <div id="playholder" style="display:none;">
+            <video id="playscreen"></video>
+            <Component id="playaudio"></Component>
+        </div>
+        <div style="height:40px;"></div>
+        <div>🐞 Debug</div>
+        <div id="debug" style="font-family:'Cascadia Mono';font-size:10px;border:solid 2px #000; padding:20px;"></div>
+        
+    </div>
+</div>
+<div style="display:flex;background-color:navy;color:white;padding:10px;">
+    <div style="flex:1;"></div><div>📋 Version 1.0 📅 July 2020</div>
+</div>
+
+<script>
+if(this.fail) {
+    main.el.style.display = "none";
+    message.$.elementSetPacketAsync(`Hello World!`);
+}
+
+listPanel.el.style.height = (window.innerHeight-90) + "px";
+mainPanel.el.style.height = (window.innerHeight-130) + "px";
+
+
+
+
+var self = this;
+this.app = {
+    panel : {
+        settings : {
+            visible : true
+        }
+    },
+    video : {
+        mode : "none"
+    },
+    audio : {
+        mode : "none"
+    }
+};
+
+lblSettings.el.addEventListener("click",()=>{
+    if(self.app.panel.settings.visible) {
+        settingsPanel.el.style.display = "none";
+        self.app.panel.settings.visible = false;
+    } else {
+        settingsPanel.el.style.display = "";
+        self.app.panel.settings.visible = true;
+
+    }
+})
+
+
+// https://rawgit.com/Miguelao/demos/master/mediarecorder.html
+//https://webrtc.github.io/samples/src/content/capture/canvas-record/
+//https://webrtc.github.io/samples/src/content/capture/canvas-record/
+function log(str) {
+    debug.$.elementPushPacketAsync(`<div>${str}</div>`);
+}
+//canvas
+
+canvas_screen.el.style.display = "none";
+
+canvas_screen.el.style.width = "640px";
+canvas_screen.el.style.height = "480px";
+canvas_screen.el.setAttribute("width",640);
+canvas_screen.el.setAttribute("height",480);
+canvas_screen.el.style.border = "solid 1px #000";
+
+var ctx = canvas_screen.el.getContext("2d");
+ctx.fillStyle = "#f00";
+ctx.beginPath();
+ctx.moveTo(0, 0);
+ctx.lineTo(640, 0);
+ctx.lineTo(640, 480);
+ctx.closePath();
+ctx.fill();
+ctx.fillStyle = "#0f0";
+ctx.beginPath();
+ctx.moveTo(0, 480);
+ctx.lineTo(640, 480);
+ctx.lineTo(0, 0);
+ctx.closePath();
+ctx.fill();
+
+var cstate = 0;
+
+
+btnNext.el.addEventListener("click",()=>{
+    switch(cstate%3) {
+        case 0:
+            ctx.fillStyle = "#00f";
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(640, 0);
+            ctx.lineTo(640, 480);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = "#0f0";
+            ctx.beginPath();
+            ctx.moveTo(0, 480);
+            ctx.lineTo(640, 480);
+            ctx.lineTo(0, 0);
+            ctx.closePath();
+            ctx.fill();
+            break;
+        case 1:
+            ctx.fillStyle = "#00f";
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(640, 0);
+            ctx.lineTo(640, 480);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = "#f00";
+            ctx.beginPath();
+            ctx.moveTo(0, 480);
+            ctx.lineTo(640, 480);
+            ctx.lineTo(0, 0);
+            ctx.closePath();
+            ctx.fill();
+            break;
+        case 2:
+            ctx.fillStyle = "#0f0";
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(640, 0);
+            ctx.lineTo(640, 480);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = "#f00";
+            ctx.beginPath();
+            ctx.moveTo(0, 480);
+            ctx.lineTo(640, 480);
+            ctx.lineTo(0, 0);
+            ctx.closePath();
+            ctx.fill();
+            break;
+    }
+    cstate++;
+})
+
+
+// devices
+
+let stream = canvas_screen.el.captureStream(32); // frames per second
+let audioStream0 = null;
+let audioStream1 = null;
+
+
+var stream0 = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+stream0.getTracks().forEach(function(track) {
+    track.stop();
+});
+
+navigator.mediaDevices.enumerateDevices()
+  .then(gotDevices)
+  .catch((error)=>{
+    log('Error: '+ error.message);   
+  });
+
+async function gotDevices(deviceInfos) {
+    //camera.el.srcObject = await navigator.mediaDevices.getUserMedia({video: true});
+    //getStream();
+    
+    //camera.el.srcObject = await navigator.mediaDevices.getUserMedia({video: true});
+    for (let i = 0; i !== deviceInfos.length; ++i) {
+        const deviceInfo = deviceInfos[i];
+        if (deviceInfo.kind === 'audioinput') {
+            var schema = await mic_devices.$.elementPushPacketAsync(`
+                <option id="opt">${ deviceInfo.label || 'mic' + (mic_devices.el.length+1) }</option>
+            `);
+            
+            log(deviceInfo.kind + ": " + deviceInfo.label +
+                " id = " + deviceInfo.deviceId);
+            schema.el.opt.setAttribute("value",deviceInfo.deviceId);
+            
+        } else if (deviceInfo.kind === 'videoinput') {
+            var schema = await video_devices.$.elementPushPacketAsync(`
+                <option id="opt">${ deviceInfo.label || 'camera ' +
+                (video_devices.el.length + 1) }</option>
+            `)
+            //alert(deviceInfo.deviceId);
+            log(deviceInfo.kind + ": " + deviceInfo.label +
+                " id = " + deviceInfo.deviceId);
+            
+            schema.el.opt.setAttribute("value",deviceInfo.deviceId);
+    } else {
+        //log('Found another kind of device: '+ deviceInfo);
+        //console.log(deviceInfo);
+    }
+  }
+}
+cameraDevice = null;
+
+btnSetCamera.el.addEventListener("click",async ()=>{
+
+    chkScreen.el.style.display = "none";
+    chkCanvas.el.style.display = "none";
+    chkCamera.el.style.display = "";
+    
+    self.app.video.mode = "camera";
+
+    canvas_screen.el.style.display = "none";
+    
+    const constraints = {
+        video: {
+            deviceId: { exact : video_devices.el.value }
+        }
+    };
+    var schema = await camera_holder.$.elementSetPacketAsync(`
+        <video id="control"></video>
+    `)
+    schema.el.control.style.width = "100%";
+    
+    try {
+      stream = schema.el.control.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (error) {
+      stream = schema.el.control.src = window.URL.createObjectURL(await navigator.mediaDevices.getUserMedia(constraints));
+    }
+    schema.el.control.play();
+    cameraDevice = schema.el.control;
+});
+
+btnSetMic.el.addEventListener("click",async ()=>{
+    chkMic.el.style.display = "";
+
+    self.app.audio.mode = "mic";
+    const constraints = {
+        audio : {
+            deviceId : { exact : mic_devices.el.value }
+        }
+    };
+
+    var schema = await mic_holder.$.elementSetPacketAsync(`
+        <audio id="control"></audio>
+    `);
+
+    try {
+        audioStream0 = schema.el.control.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch(e) {
+        audioStream0 = schema.el.control.src = window.URL.createObjectURL(await navigator.mediaDevices.getUserMedia(constraints));
+    }
+    schema.el.control.play();
+    
+});
+
+btnSetCanvas.el.addEventListener("click",()=>{
+
+    chkScreen.el.style.display = "none";
+    chkCanvas.el.style.display = "";
+    chkCamera.el.style.display = "none";
+
+    self.app.video.mode = "canvas";
+    if(cameraDevice) {
+        cameraDevice.pause();
+        stream.getTracks().forEach(function(track) {
+          track.stop();
+        });
+        cameraDevice.style.display = "none";
+        camera_holder.$.elementsClear();
+    }
+    canvas_screen.el.style.display = "";
+    stream = canvas_screen.el.captureStream(32);
+
+});
+
+btnSetScreen.el.addEventListener("click",async ()=>{
+    chkScreen.el.style.display = "";
+    chkCanvas.el.style.display = "none";
+    chkCamera.el.style.display = "none";
+
+    canvas_screen.el.style.display = "none";
+    self.app.video.mode = "desktop";
+
+    if(cameraDevice) {
+        cameraDevice.pause();
+        stream.getTracks().forEach(function(track) {
+          track.stop();
+        });
+        cameraDevice.style.display = "none";
+        camera_holder.$.elementsClear();
+    }
+
+    
+    const constraints = {
+        video: {
+            mediaSource: 'screen'
+        }
+    };
+    const constraints2 = {
+        video : true
+    };
+    
+    //throw new Error("(audio only) not implemented by navigator, try mixing an recorded audio.");
+    var stream2 = null;
+    if (navigator.getDisplayMedia) {
+        stream2 = await navigator.getDisplayMedia(constraints2);
+    } else if (navigator.mediaDevices.getDisplayMedia) {
+        stream2 = await navigator.mediaDevices.getDisplayMedia(constraints2);
+    } else {
+        stream2 = await navigator.mediaDevices.getUserMedia({video: {mediaSource: 'screen'}});
+    }
+
+    var schema = await camera_holder.$.elementSetPacketAsync(`
+        <video id="control"></video>
+    `)
+    schema.el.control.style.width = "100%";
+    
+    try {
+      stream = schema.el.control.srcObject = stream2;
+    } catch (error) {
+      stream = schema.el.control.src = window.URL.createObjectURL(stream2);
+    }
+    schema.el.control.play();
+    cameraDevice = schema.el.control;
+});
+btnSetVideoNone.el.addEventListener("click",()=>{
+
+    chkScreen.el.style.display = "none";
+    chkCanvas.el.style.display = "none";
+    chkCamera.el.style.display = "none";
+
+    if(cameraDevice) {
+        cameraDevice.pause();
+        stream.getTracks().forEach(function(track) {
+          track.stop();
+        });
+        cameraDevice.style.display = "none";
+        camera_holder.$.elementsClear();
+    }
+    self.app.video.mode = "none";
+    camera_holder.$.elementsClear();
+    playscreen.el.style.display = "none";  
+    canvas_screen.el.style.display = "none";
+});
+btnSetAudioNone.el.addEventListener("click",()=>{
+    chkMic.el.style.display = "none";
+    self.app.audio.mode = "none";
+    audioStream0.getTracks().forEach((track)=>{
+        track.stop();
+    })
+});
+
+
+let mediaRecorder;
+let recordedBlobs = [];
+let sourceBuffer;
+
+const mediaSource = new MediaSource();
+mediaSource.addEventListener('sourceopen', function handleSourceOpen(event) {
+    log('MediaSource opened');
+    sourceBuffer = mediaSource.addSourceBuffer('video/webm; codecs="vp8"');
+    log('Source buffer: ', sourceBuffer);
+}, false);
+
+
+
+
+
+log('Started stream capture from canvas element: '+ stream);
+
+
+
+
+function toggleRecording() {
+    if (btnRecord.el.textContent === 'Start Recording') {
+        startRecording();
+    } else {
+        stopRecording();
+        btnRecord.el.textContent = 'Start Recording';
+        btnPlay.el.disabled = false;
+        btnDownloadMovie.el.disabled = false;
+    }
+}
+
+
+function handleDataAvailable(event) {
+    
+    if (event.data && event.data.size > 0) {
+        recordedBlobs.push(event.data);
+    } else {
+        //console.log( mediaRecorder.requestData() );
+        //console.log(event);
+    }
+}
+
+async function handleStop(event) {
+    log('Recorder stopped: ', event);
+    if(self.app.video.mode == "none") {
+        const superBuffer = new Blob(recordedBlobs, {type: 'audio/webm'});
+        
+        var url = (window.URL || window.webkitURL).createObjectURL(superBuffer);
+        
+        var schema = await playaudio.$.elementSetPacketAsync(`
+            <audio id="audio" controls>
+                <source src="`+url+`" type="audio/webm">
+                Your browser does not support the audio tag.
+            </audio>
+        `);
+        
+        self.app.audio.control = schema.el.audio;
+
+    } else {
+        const superBuffer = new Blob(recordedBlobs, {type: 'video/webm'});
+        playscreen.el.src = window.URL.createObjectURL(superBuffer);
+    }
+    
+}
+
+
+
+
+// The nested try blocks will be simplified when Chrome 47 moves to Stable
+function startRecording() {
+
+    if(self.app.video.mode == "none" && self.app.audio.mode == "none") {
+        throw new Error("(you must select some input device)");
+        return;
+    }
+
+
+    
+    recordedBlobs = [];
+
+    if(self.app.audio.mode == "mic" && self.app.video.mode != "none") {
+        audioStream0
+            .getAudioTracks()
+            .forEach((audioTrack) => stream.addTrack(audioTrack));
+    }
+
+    var options = {};
+    if(self.app.video.mode != "none") {
+        options.mimeType =  'video/webm';
+        try {
+            mediaRecorder = new MediaRecorder(stream, options);
+        } catch (e0) {
+            try {
+                options.mimeType = 'video/webm,codecs=vp9';
+                mediaRecorder = new MediaRecorder(stream, options);
+            } catch (e1) {
+                try {
+                    options = 'video/vp8'; // Chrome 47
+                    mediaRecorder = new MediaRecorder(stream, options);
+                } catch (e2) {
+                    log(`MediaRecorder is not supported by this browser.`);
+                    log('Exception while creating MediaRecorder:'+ e2);
+                    return;
+                }
+            }
+        }
+    } else {
+
+        //stream = new MediaStream(stream.getAudioTracks());
+        stream = audioStream0;
+        try {
+            options.mimeType =  'audio/webm';
+            mediaRecorder = new MediaRecorder(stream, options);
+            
+        } catch(e) {
+            try {
+                options.mimeType = 'audio/webm;codecs=opus';
+                mediaRecorder = new MediaRecorder(stream, options);
+                
+            } catch(e1) {
+                log(`Media Recorder is not supported by this browser.`);
+                log('Exception while creating MediaRecorder:'+ e1);
+                return;
+            }
+        }
+    }
+
+    log('Created MediaRecorder', mediaRecorder, 'with options', options);
+    btnRecord.el.textContent = 'Stop Recording';
+    btnPlay.el.disabled = true;
+    btnDownloadMovie.el.disabled = true;
+    mediaRecorder.onstop = handleStop;
+    mediaRecorder.ondataavailable = handleDataAvailable;
+    mediaRecorder.onerror = function(error) {
+        console.log(error.name);
+        console.log(error);
+    }
+    
+    
+    mediaRecorder.start();
+    
+
+
+    
+    log('MediaRecorder started' + mediaRecorder);
+}
+
+function stopRecording() {
+    mediaRecorder.stop();
+    log('Recorded Blobs: '+ recordedBlobs.length);
+    playscreen.el.controls = true;
+}
+function download() {
+    const blob = new Blob(recordedBlobs, {type: 'video/webm'});
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = 'test.webm';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    }, 100);
+}
+
+btnRecord.el.addEventListener("click",()=>{ toggleRecording(); });
+btnPlay.el.addEventListener("click",()=>{ 
+    playholder.el.style.display = "";
+    
+
+    if(cameraDevice) {
+        cameraDevice.pause();
+        stream.getTracks().forEach(function(track) {
+          track.stop();
+        });
+        cameraDevice.style.display = "none";
+        camera_holder.$.elementsClear();
+    }
+    camera_holder.$.elementsClear();
+
+    canvas_screen.el.style.display = "none";
+
+    if(self.app.video.mode == "none") {
+        playscreen.el.style.display = "none";
+        self.app.audio.control.play();
+    } else {
+        playscreen.el.style.display = "";
+        playaudio.$.elementsClear();
+        playscreen.el.style.width = "100%";
+        playscreen.el.play();  
+    }
+});
+btnDownloadMovie.el.addEventListener("click",()=>{ download(); });
+
+
+btnSend.el.addEventListener("click",()=>{
+    var blob,type;
+    if(self.app.video.mode=="none") {
+        blob = new Blob(recordedBlobs, {type: 'audio/webm'});
+        type = "audio_webm";
+    } else {
+        blob = new Blob(recordedBlobs, {type: 'video/webm'});
+        type = "video_webm";
+    }
+    Import({url:"/send?type="+type,method:"POST",type:Import.Binary,data : blob })
+    .done((data)=>{
+        console.log(data);
+        refresh_list();
+    })
+    .send();
+});
+
+async function addItem(item) {
+    var visible = false;
+    var itemStruct = {
+        init : false,
+        data : item
+    };
+    var schema1 = await schema.$.list.elementUnshiftPacketAsync(`
+        <tr id="item" style="cursor:pointer;">
+            <td>📼 ${item.id}</td>
+            <td>📅 ${item.date}</td>
+            <td>🔽<a href="/messages/user1/${item.file}.webm" download>download</a></td>
+        </tr>
+        <Component id="holder"></Component>
+    `);
+    itemStruct.schema1 = schema1;
+    schema1.el.item.addEventListener("click",async ()=>{
+        if(!visible) {
+            if(!itemStruct.init) {
+                if( item.file.indexOf(".audio") == ( item.file.length - ".audio".length ) ) {
+                    var schema2 = await schema1.$.holder.elementPushPacketAsync(`
+                        <tr id="view">
+                            <td colspan="4" align="center">
+                                <audio id="control" controls>
+                                    <source src={{this.file}} type="audio/webm">
+                                </audio>
+                                <div id="sc"></div>
+                            </td>
+                        </tr>
+                    `,{context:{file:`/messages/user1/${item.file}.webm`}});
+                    schema2.el.control.play();
+                    itemStruct.schema2 = schema2;
+                } else {
+                    var schema2 = await schema1.$.holder.elementPushPacketAsync(`
+                        <tr id="view">
+                            <td colspan="4" align="center">
+                                <video id="control" src={{this.file}} controls></video>
+                                <div id="sc"></div>
+                            </td>
+                        </tr>
+                    `,{context:{file:`/messages/user1/${item.file}.webm`}});
+                    schema2.el.control.play();
+                    schema2.el.control.style.width = "100%";
+                    schema2.el.control.style.marginBottom = "-7px";
+                    itemStruct.schema2 = schema2;
+                    schema2.el.sc.scrollIntoView({block:"center"});
+                }
+            } else {
+                itemStruct.schema2.el.view.style.display = "";
+                itemStruct.schema2.el.sc.scrollIntoView({block:"center"});
+            }
+            itemStruct.init = true;
+            visible = true;
+        } else {
+            itemStruct.schema2.el.view.style.display = "none";
+            visible = false;
+        }
+    });
+}
+function refresh_list() {
+    Import({url:"/list",method:"GET"})
+    .done((data)=>{
+        //alert(data);
+        var json = JSON.parse(data);
+        if(json.result) {
+            schema.$.list.elementsClear();
+            for(var x = 0; x < json.data.length;x++) {
+                addItem(json.data[x]);
+            }
+        }
+    })
+    .send();
+}
+refresh_list();
+                
+</script>

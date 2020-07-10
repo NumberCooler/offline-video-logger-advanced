@@ -1,0 +1,5 @@
+node_modules/
+config.js
+public/messages/user1/
+package-lock.json
+public/doc.html
