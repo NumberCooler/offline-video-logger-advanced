@@ -7,18 +7,22 @@ const mysql = require('mysql2');
 const app = express();
 app.use("/",express.static('./public'));
 app.get("/list",async (req,res)=>{
+    var connection = null;
     try {
-        var connection = mysql.createConnection(config.connection);
+        connection = mysql.createConnection(config.connection);
         var data = await new Promise((resolve,reject)=>{
             connection.query(`
                 SELECT * FROM comments;
             `,function(err,results,fields) {
                 //console.log(results);
+                connection.close();
                 resolve(results);
             });
+            
         });
         res.json({result:true,data:data});
     } catch(e) {
+        if(connection) connection.close();
         console.log(e);
         res.json({result:false});
     }
@@ -86,6 +90,7 @@ app.post("/send",(req,res)=>{
         }
     });
 	req.on("end",async ()=>{
+        var connection = null;
         if(error) {
             return;
         }
@@ -112,7 +117,7 @@ app.post("/send",(req,res)=>{
                 while(fs.existsSync("./public/messages/user1/"+id+".ncp")) {
                     id = genId("msg");
                 }
-                var connection = mysql.createConnection(config.connection);
+                connection = mysql.createConnection(config.connection);
                 var maxid = await new Promise((resolve,reject)=>{
                     connection.query(
                         `
@@ -148,6 +153,7 @@ app.post("/send",(req,res)=>{
                         ( ${num.id}, ${num.user}, ${num.mode}, ${num.state}, ${text.file}, ${text.date}, ${text.comment} )
                     `,function(err,results,fields) {
                         //console.log(results);
+                        connection.close();
                         resolve(results);
                     });
                 });
@@ -156,6 +162,7 @@ app.post("/send",(req,res)=>{
                 res.json({result:true});
                 return;
             } catch(e) {
+                if(connection) connection.close();
                 console.log(e);
                 res.json({result:false});
                 return;

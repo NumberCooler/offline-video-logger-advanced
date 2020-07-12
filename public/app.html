@@ -45,6 +45,11 @@
                         <select id="mic_devices"></select>
                         <button id="btnSetMic">set</button>
                     </div>
+                    <div>
+                        audio file
+                        <input id="fileAudio" type="file" multiple="true"/>
+                        <button id="btnAddAudioFile">add</button>
+                    </div>
                 </div>
             </div>
             <div>
@@ -128,6 +133,7 @@ this.app = {
             visible : true
         }
     },
+    tracks : [],
     video : {
         mode : "none"
     },
@@ -242,9 +248,7 @@ btnNext.el.addEventListener("click",()=>{
 
 let stream = canvas_screen.el.captureStream(32); // frames per second
 let audioStream0 = null;
-let audioStream1 = null;
 
-console.log(navigator);
 var stream0 = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
 stream0.getTracks().forEach(function(track) {
     track.stop();
@@ -288,6 +292,65 @@ async function gotDevices(deviceInfos) {
     }
   }
 }
+
+
+
+
+btnSetMic.el.addEventListener("click",async ()=>{
+    chkMic.el.style.display = "";
+
+    self.app.audio.mode = "mic";
+    const constraints = {
+        audio : {
+            deviceId : { exact : mic_devices.el.value }
+        }
+    };
+
+    var schema = await mic_holder.$.elementSetPacketAsync(`
+        <audio id="control"></audio>
+    `);
+
+    try {
+        audioStream0 = schema.el.control.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch(e) {
+        audioStream0 = schema.el.control.src = window.URL.createObjectURL(await navigator.mediaDevices.getUserMedia(constraints));
+    }
+    schema.el.control.play();
+    
+});
+
+btnAddAudioFile.el.addEventListener("click",async ()=>{
+    function addTrack(file) {
+        var reader = new FileReader();
+        reader.onload = async function(e) {
+            var arrayBuffer = this.result;
+            var type = file.type.indexOf("audio") !=-1 ? "audio" : ( file.type.indexOf("video") != -1 ? "video" : null );
+            if(type == null) { console.log("unkown file type : " + file.name); return; }
+            var audio = new AudioContext();
+            var bufferSource = await audio.decodeAudioData(arrayBuffer);
+            var track = {
+                type : type,
+                data : {
+                    mime : file.type,
+                    name : file.name,
+                    audio : audio,
+                    buffer : bufferSource
+                },
+                events : []
+            };
+            fileAudio.el.value = "";
+            self.app.tracks.push(track);
+            console.log(track);
+        }
+        reader.readAsArrayBuffer(file);
+    }
+    for(var x = 0; x < fileAudio.el.files.length;x++) {
+        addTrack(fileAudio.el.files[x]);
+    }
+});
+
+
+
 cameraDevice = null;
 
 btnSetCamera.el.addEventListener("click",async ()=>{
@@ -317,29 +380,6 @@ btnSetCamera.el.addEventListener("click",async ()=>{
     }
     schema.el.control.play();
     cameraDevice = schema.el.control;
-});
-
-btnSetMic.el.addEventListener("click",async ()=>{
-    chkMic.el.style.display = "";
-
-    self.app.audio.mode = "mic";
-    const constraints = {
-        audio : {
-            deviceId : { exact : mic_devices.el.value }
-        }
-    };
-
-    var schema = await mic_holder.$.elementSetPacketAsync(`
-        <audio id="control"></audio>
-    `);
-
-    try {
-        audioStream0 = schema.el.control.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
-    } catch(e) {
-        audioStream0 = schema.el.control.src = window.URL.createObjectURL(await navigator.mediaDevices.getUserMedia(constraints));
-    }
-    schema.el.control.play();
-    
 });
 
 btnSetCanvas.el.addEventListener("click",()=>{
@@ -676,6 +716,7 @@ async function addItem(item) {
             <td>📼 ${item.id}</td>
             <td>📅 ${item.date}</td>
             <td>🔽<a href="/messages/user1/${item.file}.ncp" download>download</a></td>
+            <td>📌 add as track</td>
         </tr>
         <Component id="holder"></Component>
     `);
@@ -736,11 +777,11 @@ refresh_list();
 window.audio_mix = async ()=>{
 
     var audio = new AudioContext();
-
     // load begin
     var data = await fetch(`/sample.mp3`);
     var buffer = await data.arrayBuffer();
     var bufferSource = await audio.decodeAudioData(buffer);
+
     // load end 
 
     var mixer = audio.createMediaStreamDestination();
