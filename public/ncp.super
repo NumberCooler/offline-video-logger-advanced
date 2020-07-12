@@ -8,10 +8,10 @@
             // expected blob of the zip
             this.state = 1;
         } else {
-            this.state = -2;
+            this.error = new Error("must have data attribute.");
         }
     } else {
-        this.state = -1;
+        this.error = new Error("must have data attribute.");
     }
     this.zip = await JSZip.loadAsync(this.props.data);
     var result = await this.zip.file("spec.json").async("string");
@@ -25,7 +25,10 @@
                 if( this.spec.type == "audio.webm" ) {
                     this.ui.push(`<audio id="control" controls></audio>`)
                 } else if(this.spec.type == "video.webm") {
+                    this.ui.push(`<div style="position:relative;">`);
                     this.ui.push(`<video id="control" controls></video>`);
+                    this.ui.push(`<Component id="debug"></Component>`);
+                    this.ui.push(`</div>`);
                 }
 
             } else {
@@ -57,6 +60,71 @@
                 } else if(this.spec.type == "video.webm") {
                     var content_blob = await this.zip.file("data.webm").async("blob");
                     control.el.src = window.URL.createObjectURL(content_blob);
+                    var schema1 = await debug.$.elementPushPacketAsync(`
+                        <Component id="prompt"></Component>
+                        <div style="display:none;">
+                            <div style="height:30px;"></div>
+                            <div style="display:flex;">
+                                <div>duration</div>
+                                <div id="lblDuration"></div>
+                            </div>
+                            <div style="display:flex;">
+                                <div>current</div>
+                                <div id="lblCurrent"></div>
+                            </div>
+                        </div>
+                    `);
+                    control.el.addEventListener("playing",async (e)=>{
+                        schema1.$.prompt.elementsClear();
+                    });
+                    control.el.addEventListener("timeupdate",async (e)=>{
+                        //if(e.target.currentTime == 0) {
+                          //  schema1.$.prompt.elementsClear();
+                        //}
+                        //schema1.$.lblDuration.elementSetPacketAsync(""+e.target.duration);
+                        //schema1.$.lblCurrent.elementSetPacketAsync(""+e.target.currentTime);
+                        if(e.target.duration == e.target.currentTime) {
+                            var schema2 = await schema1.$.prompt.elementSetPacketAsync(`
+                                <div id="overlay" style="position:absolute;left:0px;top:0px;background-image: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,1));">
+                                    <div style="padding:40px;padding-bottom:5px;display:flex;">
+                                        <div id="btnLike" style="flex:1;border:solid 1px #000;margin-right:10px;background-color:white;color:black;cursor:pointer;">Gostei</div>
+                                        <div id="btnDislike" style="flex:1;border:solid 1px #000;background-color:white;color:black;cursor:pointer;">Não Gostei</div>
+                                    </div>
+                                    <div style="padding:40px;padding-top:5px;display:flex;">
+                                        <div id="btnContact" style="flex:1;border:solid 1px #000;background-color:white;color:black;cursor:pointer;">Entrar em contato</div>
+                                    </div>
+                                </div>
+                            `);
+                            schema2.el.overlay.style.width = control.el.offsetWidth + 'px';
+                            schema2.el.overlay.style.height = control.el.offsetHeight + 'px';
+                            schema2.el.btnLike.addEventListener("mouseover",()=>{
+                                schema2.el.btnLike.style.backgroundColor = "black";
+                                schema2.el.btnLike.style.color = "white";
+                            });
+                            schema2.el.btnLike.addEventListener("mouseout",()=>{
+                                schema2.el.btnLike.style.backgroundColor = "white";
+                                schema2.el.btnLike.style.color = "black";
+                            });
+                            schema2.el.btnDislike.addEventListener("mouseover",()=>{
+                                schema2.el.btnDislike.style.backgroundColor = "black";
+                                schema2.el.btnDislike.style.color = "white";
+                            });
+                            schema2.el.btnDislike.addEventListener("mouseout",()=>{
+                                schema2.el.btnDislike.style.backgroundColor = "white";
+                                schema2.el.btnDislike.style.color = "black";
+                            });
+                            schema2.el.btnContact.addEventListener("mouseover",()=>{
+                                schema2.el.btnContact.style.backgroundColor = "black";
+                                schema2.el.btnContact.style.color = "white";
+                            });
+                            schema2.el.btnContact.addEventListener("mouseout",()=>{
+                                schema2.el.btnContact.style.backgroundColor = "white";
+                                schema2.el.btnContact.style.color = "black";
+                            });
+                            //control.$.emit("end");
+                        }
+                    })
+                    //vid.duration
                 }
             }
         }

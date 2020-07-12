@@ -165,6 +165,14 @@ app.post("/send",(req,res)=>{
     });
 });
 
-app.listen(8082,()=>{
-    console.log("listening " + 8082);
+
+const https = require('https');
+const privateKey  = fs.readFileSync('server.key', 'utf8');
+const certificate = fs.readFileSync('server.cert', 'utf8');
+const credentials = {key: privateKey, cert: certificate};
+var httpsServer = https.createServer(credentials, app);
+var port = 83;
+httpsServer.listen(port,"::1",()=>{
+    console.log("listening " + port);
 });
+

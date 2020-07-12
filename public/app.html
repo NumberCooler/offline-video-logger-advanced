@@ -18,7 +18,7 @@
     }
 </style>
 <div style="display:flex;background-color:navy;color:white;padding:10px;">
-    <div>🧊 NumberCooler Recorder</div>
+    <div>🧊 NumberCooler Recorder Premium</div>
 </div>
 <div id="main" style="display:flex;padding:0px;border-left:solid 10px navy;border-right:solid 10px navy;">
     <div id="listPanel" style="flex:0.6;overflow:auto;">
@@ -77,7 +77,6 @@
             <button id="btnRecord">Start Recording</button>
             <button id="btnPlay">play</button>
             <button id="btnDownloadMovie">download movie</button>
-            <button id="btnDownloadPicture">download picture</button>
             <button id="btnNext">change canvas</button>
         </div>
         <div>
@@ -245,7 +244,7 @@ let stream = canvas_screen.el.captureStream(32); // frames per second
 let audioStream0 = null;
 let audioStream1 = null;
 
-
+console.log(navigator);
 var stream0 = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
 stream0.getTracks().forEach(function(track) {
     track.stop();
@@ -593,19 +592,19 @@ function stopRecording() {
     log('Recorded Blobs: '+ recordedBlobs.length);
     playscreen.el.controls = true;
 }
-function download() {
-    const blob = new Blob(recordedBlobs, {type: 'video/webm'});
-    const url = window.URL.createObjectURL(blob);
+async function download() {
+    var nblob = await makeNcpBlob(recordedBlobs);
+    const url = window.URL.createObjectURL(nblob);
     const a = document.createElement('a');
     a.style.display = 'none';
     a.href = url;
-    a.download = 'test.webm';
+    a.download = 'last_record.ncp';
     document.body.appendChild(a);
     a.click();
     setTimeout(() => {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
-    }, 100);
+    }, 10000);
 }
 
 btnRecord.el.addEventListener("click",()=>{ toggleRecording(); });
@@ -698,7 +697,7 @@ async function addItem(item) {
                 schema2.el.sc.scrollIntoView({block:"center"});
                 schema2.exports.ncp.control.el.play();
                 if( schema2.exports.ncp.spec.type == "audio.webm" ) {
-                    
+
                 } else if(schema2.exports.ncp.spec.type == "video.webm") { // video tag, expecting bad margin, 100% width is custom
                     schema2.exports.ncp.control.el.style.width = "100%";
                     schema2.exports.ncp.control.el.style.marginBottom = "-7px";
@@ -731,5 +730,73 @@ function refresh_list() {
     .send();
 }
 refresh_list();
-                
+
+
+
+window.audio_mix = async ()=>{
+
+    var audio = new AudioContext();
+
+    // load begin
+    var data = await fetch(`/sample.mp3`);
+    var buffer = await data.arrayBuffer();
+    var bufferSource = await audio.decodeAudioData(buffer);
+    // load end 
+
+    var mixer = audio.createMediaStreamDestination();
+    var player = new Audio();
+
+    // load mic begin
+    var micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    // load mic end
+
+    var microphone = audio.createMediaStreamSource(micStream);
+    var microphoneGain = audio.createGain();
+    microphone.connect(microphoneGain);
+    microphoneGain.gain.value = 0.5;
+
+    var playback = audio.createBufferSource();
+    var playbackGain = audio.createGain();
+    playback.buffer = bufferSource;
+    playback.connect(playbackGain);
+    playbackGain.gain.value = 0.5;
+
+    // play of audio playback
+    playback.start();
+    playbackGain.connect(audio.destination);
+
+    microphoneGain.connect(mixer);
+    playbackGain.connect(mixer);
+    // return of microphone
+    //microphone.connect(audio.destination);
+
+    var mediaRecorder = new MediaRecorder(mixer.stream,{mimeType :  'audio/webm'});
+    var chunks = [];
+    mediaRecorder.start(1);
+    mediaRecorder.ondataavailable = function (event) {
+        if (event.data && event.data.size > 0) {
+            chunks.push(event.data);
+        }
+    }
+    mediaRecorder.onstop = function(event) {
+        var player = new Audio();
+        player.controls = "controls";
+        var blob = new Blob(chunks, { "type": "audio/webm" });
+        audioDownload = URL.createObjectURL(blob);
+        var player = new Audio();
+        player.src = audioDownload;
+        player.play();
+    };
+
+    setTimeout(()=>{
+        micStream.getTracks().forEach(function(track) {
+            track.stop();
+        });
+        playback.stop();
+        mediaRecorder.stop();
+        audio.close();
+    },10000);
+
+}
+
 </script>
