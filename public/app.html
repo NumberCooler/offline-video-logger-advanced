@@ -712,9 +712,8 @@ async function addItem(item) {
         data : item
     };
     var schema1 = await schema.$.list.elementUnshiftPacketAsync(`
-        <tr id="item" style="cursor:pointer;">
-            <td>📼 ${item.id}</td>
-            <td>📅 ${item.date}</td>
+        <tr style="cursor:pointer;">
+            <td id="item">📼 ${item.id}</td>
             <td>🔽<a href="/messages/user1/${item.file}.ncp" download>download</a></td>
             <td>📌 add as track</td>
         </tr>
@@ -724,11 +723,13 @@ async function addItem(item) {
     schema1.el.item.addEventListener("click",async ()=>{
         if(!visible) {
             if(!itemStruct.init) {
+                itemStruct.init = true;
                 var data = await fetch(`/messages/user1/${item.file}.ncp`);
                 var blob = await data.blob();
                 var schema2 = await schema1.$.holder.elementPushPacketAsync(`
                     <tr id="view">
                         <td colspan="4" align="center">
+                            <div>📅 ${item.date}</div>
                             <Component id="ncp" src="ncp.super" data={{this.src}}></Component>
                             <div id="sc"></div>
                         </td>
@@ -748,7 +749,7 @@ async function addItem(item) {
                 itemStruct.schema2.el.sc.scrollIntoView({block:"center"});
                 itemStruct.schema2.exports.ncp.control.el.play();
             }
-            itemStruct.init = true;
+            
             visible = true;
         } else {
             itemStruct.schema2.el.view.style.display = "none";
