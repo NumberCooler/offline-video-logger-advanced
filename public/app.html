@@ -34,7 +34,7 @@
         <div id="lblSettings" style="cursor:pointer;">🔧 Input Settings</div>
         <div id="settingsPanel" style="padding-left:20px;">
             <div>
-                <div>Audio</div>
+                <div>🔊 Audio</div>
                 <div style="padding-left:20px;">
                     <div>
                         none
@@ -53,7 +53,7 @@
                 </div>
             </div>
             <div>
-                <div>Video</div>
+                <div>📺 Video</div>
                 <div style="padding-left:20px;">
                     <div>
                         none
@@ -78,18 +78,30 @@
         </div>
         
         <div>🎬 Stage</div>
-        <div>
-            <button id="btnRecord">Start Recording</button>
+        <div style="display:flex;">
+            <button id="btnRecord">start recording</button>
             <button id="btnPlay">play</button>
+            <button id="btnClearStage">clear</button>
+            <div style="flex:1;"></div>
             <button id="btnDownloadMovie">download movie</button>
+            <div style="flex:1;"></div>
             <button id="btnNext">change canvas</button>
         </div>
         
         <div style="padding-left:20px;">
-            <div>🛵 Tracks</div>
-            <div style="display:flex;flex-wrap: wrap;">
-                <Component id="tracksView"></Component>
+            <div id="lblTracks" style="display:none;">
+                <div>🛵 Tracks</div>
+                <div style="display:flex;flex-wrap: wrap;">
+                    <Component id="tracksView"></Component>
+                </div>
             </div>
+            <script>
+                /*
+                    Camera Hit Tracks
+                    Movie Hit Tracks
+                    Canvas Hit Tracks
+                */
+            </script>
         </div>
         <div style="display:flex;padding-top:10px;padding-bottom:10px;">
             <div id="chkMic" style="display:none;padding:5px;background-color:gainsboro;border-radius:20px;padding-left:15px;padding-right:15px;margin-right:10px;">🔴 Mic</div>
@@ -152,6 +164,11 @@ this.app = {
     hasAudioTracks : function () { for(var x = 0; x < this.tracks.length;x++) if(this.tracks[x].type == "audio") return true; return false; },
     hasVideoTracks : function () { for(var x = 0; x < this.tracks.length;x++) if(this.tracks[x].type == "video") return true; return false; }
 };
+
+btnClearStage.el.addEventListener("click",()=>{
+    self.app.tracks.splice(0,self.app.tracks.length);
+    self.app.events.emit("updateTracks");
+});
 
 lblSettings.el.addEventListener("click",()=>{
     if(self.app.panel.settings.visible) {
@@ -352,7 +369,7 @@ btnAddAudioFile.el.addEventListener("click",async ()=>{
             fileAudio.el.value = "";
             self.app.tracks.push(track);
             console.log(track);
-            self.app.events.emit("addTrack");
+            self.app.events.emit("updateTracks");
         }
         reader.readAsArrayBuffer(file);
     }
@@ -509,11 +526,11 @@ log('Started stream capture from canvas element: '+ stream);
 
 
 function toggleRecording() {
-    if (btnRecord.el.textContent === 'Start Recording') {
+    if (btnRecord.el.textContent === 'start recording') {
         startRecording();
     } else {
         stopRecording();
-        btnRecord.el.textContent = 'Start Recording';
+        btnRecord.el.textContent = 'start recording';
         btnPlay.el.disabled = false;
         btnDownloadMovie.el.disabled = false;
     }
@@ -546,6 +563,9 @@ async function handleStop(event) {
         
         self.app.audio.control = schema.el.audio;
 
+        self.app.events.off("hitTrack",self.app.events.hitTrack);
+        delete self.app.events.hitTrack;
+        
     } else {
         const superBuffer = new Blob(recordedBlobs, {type: 'video/webm'});
         playscreen.el.src = window.URL.createObjectURL(superBuffer);
@@ -579,10 +599,7 @@ function startRecording() {
     }
 
     if(self.app.hasAudioTracks()) {
-        
-
-        //playback.start();
-        self.app.events.on("hitTrack",(n)=>{
+        self.app.events.hitTrack = (n)=>{
             if(n < self.app.tracks.length && self.app.tracks[n].type == "audio") {
                 var playback = audioCtx.createBufferSource();
                 var playbackGain = audioCtx.createGain();
@@ -594,7 +611,9 @@ function startRecording() {
                 playback.start();
             }
             console.log("hit",self.app.tracks[n]);
-        });
+        };
+        //playback.start();
+        self.app.events.on("hitTrack",self.app.events.hitTrack);
 
     }
 
@@ -647,7 +666,7 @@ function startRecording() {
     }
 
     log('Created MediaRecorder', mediaRecorder, 'with options', options);
-    btnRecord.el.textContent = 'Stop Recording';
+    btnRecord.el.textContent = 'stop recording';
     btnPlay.el.disabled = true;
     btnDownloadMovie.el.disabled = true;
     mediaRecorder.onstop = handleStop;
@@ -744,25 +763,31 @@ btnSend.el.addEventListener("click",async ()=>{
     .send();
 });
 
-self.app.events.on("addTrack",()=>{
+
+self.app.events.on("updateTracks",()=>{
     // do not remove duplicate tracks cause it may be same track name for different folders
     tracksView.$.elementsClear();
     async function addTrack(n,track) {
-        var schema = await tracksView.$.elementPushPacketAsync(`
-            <div style="display:flex;">
-                <div style="padding-left:5px;padding-right:5px;">${(""+n).padStart(2,"0")}</div>
-                <div style="padding-left:5px;padding-right:5px;width:100px;overflow:hidden;white-space: nowrap;">${track.data.name}</div>
-                <div style="padding-left:5px;padding-right:5px;"><button id="btnHit">hit</button></div>
-            </div>
-        `);
-        schema.el.btnHit.addEventListener("click",()=>{
-            self.app.events.emit("hitTrack",[n]);
-        });
+        if(track.type == "audio") {
+            var schema = await tracksView.$.elementPushPacketAsync(`
+                <div style="display:flex;">
+                    <div style="padding-left:5px;padding-right:5px;">🔊 ${(""+n).padStart(2,"0")}</div>
+                    <div style="padding-left:5px;padding-right:5px;width:100px;overflow:hidden;white-space: nowrap;">${track.data.name}</div>
+                    <div style="padding-left:5px;padding-right:5px;"><button id="btnHit">hit</button></div>
+                </div>
+            `);
+            schema.el.btnHit.addEventListener("click",()=>{
+                self.app.events.emit("hitTrack",[n]);
+            });
+        }
     }
+    if(self.app.tracks.length>0) lblTracks.el.style.display = "";
+    else lblTracks.el.style.display = "none";
     for(var x =0; x < self.app.tracks.length;x++) {
         addTrack(x,self.app.tracks[x]);
     }
 });
+
 
 async function addAsset(item) {
     var visible = false;
@@ -840,7 +865,7 @@ async function addAsset(item) {
                     events : []
                 };
                 self.app.tracks.push(track);
-                self.app.events.emit("addTrack");
+                self.app.events.emit("updateTracks");
                 console.log(track);
             } else if(this.spec.type == "video.webm") {
                 throw new Error("video not implemented");
