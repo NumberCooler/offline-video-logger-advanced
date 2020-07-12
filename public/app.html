@@ -84,8 +84,12 @@
             <button id="btnDownloadMovie">download movie</button>
             <button id="btnNext">change canvas</button>
         </div>
-        <div>
-            <button id="btnSend">save</button>
+        
+        <div style="padding-left:20px;">
+            <div>🛵 Tracks</div>
+            <div style="display:flex;flex-wrap: wrap;">
+                <Component id="tracksView"></Component>
+            </div>
         </div>
         <div style="display:flex;padding-top:10px;padding-bottom:10px;">
             <div id="chkMic" style="display:none;padding:5px;background-color:gainsboro;border-radius:20px;padding-left:15px;padding-right:15px;margin-right:10px;">🔴 Mic</div>
@@ -103,6 +107,9 @@
         <div id="playholder" style="display:none;">
             <video id="playscreen"></video>
             <Component id="playaudio"></Component>
+        </div>
+        <div>
+            <button id="btnSend">save</button>
         </div>
         <div style="height:40px;"></div>
         <div>🐞 Debug</div>
@@ -128,18 +135,22 @@ mainPanel.el.style.height = (window.innerHeight-130) + "px";
 
 var self = this;
 this.app = {
+    events : Class.create("WithEvents"),
     panel : {
         settings : {
             visible : true
         }
     },
+    stream : null,
     tracks : [],
     video : {
         mode : "none"
     },
     audio : {
         mode : "none"
-    }
+    },
+    hasAudioTracks : function () { for(var x = 0; x < this.tracks.length;x++) if(this.tracks[x].type == "audio") return true; return false; },
+    hasVideoTracks : function () { for(var x = 0; x < this.tracks.length;x++) if(this.tracks[x].type == "video") return true; return false; }
 };
 
 lblSettings.el.addEventListener("click",()=>{
@@ -245,8 +256,8 @@ btnNext.el.addEventListener("click",()=>{
 
 
 // devices
+self.app.stream = stream = canvas_screen.el.captureStream(32); // frames per second
 
-let stream = canvas_screen.el.captureStream(32); // frames per second
 let audioStream0 = null;
 
 var stream0 = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
@@ -341,6 +352,7 @@ btnAddAudioFile.el.addEventListener("click",async ()=>{
             fileAudio.el.value = "";
             self.app.tracks.push(track);
             console.log(track);
+            self.app.events.emit("addTrack");
         }
         reader.readAsArrayBuffer(file);
     }
@@ -491,10 +503,6 @@ mediaSource.addEventListener('sourceopen', function handleSourceOpen(event) {
     log('Source buffer: ', sourceBuffer);
 }, false);
 
-
-
-
-
 log('Started stream capture from canvas element: '+ stream);
 
 
@@ -551,17 +559,48 @@ async function handleStop(event) {
 // The nested try blocks will be simplified when Chrome 47 moves to Stable
 function startRecording() {
 
-    if(self.app.video.mode == "none" && self.app.audio.mode == "none") {
+    if(self.app.video.mode == "none" && self.app.audio.mode == "none" && !self.app.hasAudioTracks()) {
         throw new Error("(you must select some input device)");
         return;
     }
 
-
-    
     recordedBlobs = [];
 
-    if(self.app.audio.mode == "mic" && self.app.video.mode != "none") {
-        audioStream0
+    var audioCtx = new AudioContext();
+    var audioMixer = audioCtx.createMediaStreamDestination();
+
+    if( self.app.audio.mode == "mic" ) {
+        var microphone = audioCtx.createMediaStreamSource(audioStream0);
+        var microphoneGain = audioCtx.createGain();
+        microphone.connect(microphoneGain);
+        microphoneGain.gain.value = 0.5;
+        microphoneGain.connect(audioMixer);
+        microphone.connect(audioCtx.destination);
+    }
+
+    if(self.app.hasAudioTracks()) {
+        
+
+        //playback.start();
+        self.app.events.on("hitTrack",(n)=>{
+            if(n < self.app.tracks.length && self.app.tracks[n].type == "audio") {
+                var playback = audioCtx.createBufferSource();
+                var playbackGain = audioCtx.createGain();
+                playback.buffer = self.app.tracks[n].data.buffer;
+                playback.connect(playbackGain);
+                playbackGain.gain.value = 0.5;
+                playbackGain.connect(audioMixer);
+                playbackGain.connect(audioCtx.destination);
+                playback.start();
+            }
+            console.log("hit",self.app.tracks[n]);
+        });
+
+    }
+
+    // mixing audio and video
+    if( ( self.app.audio.mode == "mic" || self.app.hasAudioTracks() ) && self.app.video.mode != "none") {
+        audioMixer.stream
             .getAudioTracks()
             .forEach((audioTrack) => stream.addTrack(audioTrack));
     }
@@ -589,7 +628,7 @@ function startRecording() {
     } else {
 
         //stream = new MediaStream(stream.getAudioTracks());
-        stream = audioStream0;
+        stream = audioMixer.stream;
         try {
             options.mimeType =  'audio/webm';
             mediaRecorder = new MediaRecorder(stream, options);
@@ -705,7 +744,27 @@ btnSend.el.addEventListener("click",async ()=>{
     .send();
 });
 
-async function addItem(item) {
+self.app.events.on("addTrack",()=>{
+    // do not remove duplicate tracks cause it may be same track name for different folders
+    tracksView.$.elementsClear();
+    async function addTrack(n,track) {
+        var schema = await tracksView.$.elementPushPacketAsync(`
+            <div style="display:flex;">
+                <div style="padding-left:5px;padding-right:5px;">${(""+n).padStart(2,"0")}</div>
+                <div style="padding-left:5px;padding-right:5px;width:100px;overflow:hidden;white-space: nowrap;">${track.data.name}</div>
+                <div style="padding-left:5px;padding-right:5px;"><button id="btnHit">hit</button></div>
+            </div>
+        `);
+        schema.el.btnHit.addEventListener("click",()=>{
+            self.app.events.emit("hitTrack",[n]);
+        });
+    }
+    for(var x =0; x < self.app.tracks.length;x++) {
+        addTrack(x,self.app.tracks[x]);
+    }
+});
+
+async function addAsset(item) {
     var visible = false;
     var itemStruct = {
         init : false,
@@ -715,7 +774,7 @@ async function addItem(item) {
         <tr style="cursor:pointer;">
             <td id="item">📼 ${item.id}</td>
             <td>🔽<a href="/messages/user1/${item.file}.ncp" download>download</a></td>
-            <td>📌 add as track</td>
+            <td id="addAsTrack">📌 add as track</td>
         </tr>
         <Component id="holder"></Component>
     `);
@@ -756,6 +815,40 @@ async function addItem(item) {
             visible = false;
         }
     });
+    schema1.el.addAsTrack.addEventListener("click",async ()=>{
+        console.log("addAsTrack");
+        var data = await fetch(`/messages/user1/${item.file}.ncp`);
+        var blob = await data.blob();
+        async function load() {
+            this.zip = await JSZip.loadAsync(this.props.data);
+            var result = await this.zip.file("spec.json").async("string");
+            this.spec = JSON.parse(result);
+            // bound to 0.0.1
+            if( this.spec.type == "audio.webm" ) {
+                // change by this point compared to control
+                var arrayBuffer = await this.zip.file("data.webm").async("arraybuffer"); 
+                var audio = new AudioContext();
+                var bufferSource = await audio.decodeAudioData(arrayBuffer);
+                var track = {
+                    type : "audio",
+                    data : {
+                        mime : "application/ncp",
+                        name : item.file + ".ncp",
+                        audio : audio,
+                        buffer : bufferSource
+                    },
+                    events : []
+                };
+                self.app.tracks.push(track);
+                self.app.events.emit("addTrack");
+                console.log(track);
+            } else if(this.spec.type == "video.webm") {
+                throw new Error("video not implemented");
+            }
+            // end bound
+        }
+        load.apply({props:{data:blob}}); // to reuse this.zip same as ncp.super
+    });
 }
 function refresh_list() {
     Import({url:"/list",method:"GET"})
@@ -765,7 +858,7 @@ function refresh_list() {
         if(json.result) {
             schema.$.list.elementsClear();
             for(var x = 0; x < json.data.length;x++) {
-                addItem(json.data[x]);
+                addAsset(json.data[x]);
             }
         }
     })
