@@ -622,7 +622,13 @@ async function handlePause(event) {
 }
 async function handleStop(event) {
     log('Recorder stopped: ', event);
-    
+    await self.app.audio.ctx.close();
+
+    for(var x = 0; x < self.app.audio.recordTracks.length;x++) {
+        console.log("removing tracks");
+        stream.removeTrack(self.app.audio.recordTracks[x]);
+    }
+
     if(self.app.video.mode == "none") {
         const superBuffer = new Blob(recordedBlobs, {type: 'audio/webm'});
         var url = (window.URL || window.webkitURL).createObjectURL(superBuffer);
@@ -638,6 +644,7 @@ async function handleStop(event) {
     } else {
         const superBuffer = new Blob(recordedBlobs, {type: 'video/webm'});
         playscreen.el.src = window.URL.createObjectURL(superBuffer);
+        self.app.events.off("hitTrack",self.app.events.hitTrack);
     }
     
 }
@@ -657,8 +664,11 @@ function startRecording() {
     recordHolder.el.style.display = "";
     recordedBlobs = [];
 
-
+    
     var audioCtx = new AudioContext();
+    self.app.audio.ctx = audioCtx;
+    self.app.audio.recordTracks = [];
+
     var audioMixer = audioCtx.createMediaStreamDestination();
 
     if( self.app.audio.mode == "mic" ) {
@@ -697,9 +707,14 @@ function startRecording() {
 
     // mixing audio and video
     if( ( self.app.audio.mode == "mic" || self.app.hasAudioTracks() ) && self.app.video.mode != "none") {
+        console.log("MIXED IN AUDIO AND VIDEO");
         audioMixer.stream
             .getAudioTracks()
-            .forEach((audioTrack) => stream.addTrack(audioTrack));
+            .forEach((audioTrack) => {
+                self.app.audio.recordTracks.push(audioTrack);
+                console.log(audioTrack);
+                stream.addTrack(audioTrack);
+            });
     }
     
     if(self.app.video.mode != "none") {
