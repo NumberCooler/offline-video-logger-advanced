@@ -1625,6 +1625,17 @@ Type = (function () {
 	t.isError = f0(ar[8]);
 	t.isAsync = f0(ar[13]);
 	t.isPromise = f0(ar[14]);
+	t.newOf = function(type,meta) {
+		var obj = {};
+		obj[Symbol.toStringTag] = type;
+		return obj;
+	}
+	t.check = function(obj,type) {
+		return f.apply(obj) == "[object " + type + "]"
+	}
+	t.value = function(obj) {
+		return f.apply(obj);
+	}
 	return t;
 })();
 
@@ -1899,7 +1910,7 @@ JSONTools.pretty_stringfy = function (json) {
 }
 
 
-if ("localStorage" in window) {
+if (false && "localStorage" in window) {
 	// front-end developer level protect against unawareness
 	var save = window.localStorage.setItem;
 	var load = window.localStorage.getItem;
@@ -2022,7 +2033,7 @@ Class = function () {
 };
 Class.prototype.define = function (name, options) {
 	// deprecated (name,inherits,constructor,predef)
-	//console.log("Class define", name);
+	console.log("Class define", name);
 
 	var meta = null
 		, constructor = null
@@ -2452,7 +2463,6 @@ Class.prototype.create = function (c, opt, mode) {
 	};
 	obj_def.prototype = Object.create(c.constructor.prototype);
 	obj_def.prototype[Symbol.toStringTag] = c.fullName;
-
 	ret_instance = new obj_def();
 
 	for (var x = 0; x < c.properties.length; x++) {
@@ -3462,8 +3472,8 @@ Class.define("WithDOMNode", {
 		}
 	}
 });
-
-
+var DEBUG_COMPONENT_LEVEL = 0;
+ComponentCache = {};
 Class.define("Component", {
 	from: ["WithDOMNode"]
 	, ctor: function () {
@@ -4085,710 +4095,14 @@ Class.define("Component", {
 			}
 		};
 
-		var newPacket2 = function (parent, pattern, options) {
-			//pattern = pattern.split("\r").join("").split("\n").join("").split("\t").join(" ");
-
-			var ret = {
-				el: {},
-				$: {},
-				conv: {},
-				schema: {},
-				exports: {}
-			};
-			var intag = false;
-			var intagname = false;
-			var intagattrib = false;
-			var intagattrib_key = false;
-			var intagattrib_val = false;
-			var intagattrib_string = false;
-			var intagattrib_string2 = false;
-			var stack = [];
-			var pointer = [{
-				element: parent.internal.WithDOMNode.parent,
-				container: parent,
-			}];
-			var text = "";
-			var attributes_to_delete = [];
-			var ret_pointer = ret;
-			var current = {};
-			var current_attribute = null;
-			var count = 0;
-			var later_attribs = [];
-			/*
-			function ask(stream_clue,partial) {
-				if("ask" in options) {
-					//console.log("asking");
-					var extra_args = [stream_clue, partial];
-					return options.ask.apply(options.ask_owner,options.ask_args.concat(extra_args));
-				}
-			}
-			*/
-			function tag_handle(tag) {
-
-				if (tag.endTag) {
-					if (stack[stack.length - 1].tagName == tag.tagName) {
-						stack.pop();
-						pointer.pop();
-					} else {
-						while (stack.length > 0) {
-							stack.pop();
-							pointer.pop();
-							if (stack.length > 0 && stack[stack.length - 1].tagName == tag.tagName) {
-								return;
-							}
-						}
-						throw "odd tag " + tag.tagName;
-					}
-				} else {
-					if (tag.soleTag) {
-						function create_ask_obj(x) {
-							return { type: "attribute", key: tag.attributes[x].name, value: tag.attributes[x].value };
-						}
-						var id = [""];
-						var check = false;
-						var value = "";
-						var value2 = "";
-						var has_src = false;
-						var src = "";
-						var convert = false;
-						var lang = "javascript";
-						for (var x = 0; x < tag.attributes.length; x++) {
-							if (tag.attributes[x].name == "id") {
-								check = true;
-								if (tag.attributes[x].value == "") throw "tag with identification must have a name";
-
-								id.push(tag.attributes[x].value);
-							} else if (tag.attributes[x].name == "localStorage") {
-								has_src = true;
-								src = tag.attributes[x].value;
-							}
-							if (tag.tagName == "text" && tag.attributes[x].name == "value") {
-								//value = tag.attributes[x].value;
-
-								value = BrowserTools.decodeEntities(tag.attributes[x].value);
-								value2 = tag.attributes[x].value;
-
-							}
-						}
-						var tmp = attributes_to_delete.length;
-						while (tmp > 0) { tmp -= 1; attributes_to_delete.pop(); }
-						if (!check) { id.push("_" + count); }
-						id = id.join("");
-						if (tag.tagName == "text") {
-
-							if (value != "") {
-								var pel = pointer[pointer.length - 1].element;
-								//if(pel) { console.log(">>tag:",pel.tagName,value); }
-								if (pel && (
-									pel.tagName.toUpperCase() == "STYLE" ||
-									pel.tagName.toUpperCase() == "OPTION" ||
-									pel.tagName.toUpperCase() == "SPAN" ||
-									pel.tagName.toUpperCase() == "SCRIPT" ||
-									pel.tagName.toUpperCase() == "TEXTAREA" ||
-									pel.tagName.toUpperCase() == "PRE"
-								)) {
-									if (pel.tagName.toUpperCase() == "SCRIPT") {
-										var lang = pel.getAttribute("language")
-										if (lang == "comment") {
-
-										} else if (pel.getAttribute("src") != null) {
-
-											pel.appendChild(document.createTextNode("" + value2));
-
-										} else {
-											//get on lazy component, require schema to be defined on load component at ' tag.tagName == "Component" '
-											var code = [`
-												  var code = "";
-												  var _t1 = this;
-												  function sandbox1(schema,self) {
-													  //console.log("RUNNING");
-												  `];
-											for (var key in ret.el) {
-												code.push(`
-												  var ${key} = { 
-													  el : schema.el.${key}, 
-													  $ : schema.$.${key}, 
-													  get : function(callback) {
-														  var _t2 = this;
-														  var loop2 = setInterval(function() {
-															  var sel = null;
-															  var sel2 = null;
-															  var check1 = false;
-															  var check2 = false;
-															  if("schema" in schema) {
-																  sel = schema.schema.${key};
-																  check1 = true;
-																  console.log("SCHEMA");
-															  }
-															  if("exports" in schema) {
-																  sel2 = schema.exports.${key};
-																  check2 = true;
-																  console.log("EXPORTS",sel2);
-															  }
-  															  if( check1 && check2) {
-																  clearInterval(loop2);
-																  console.log("GET CALLBACK",sel2);
-																  callback.apply(_t1,[sel,sel2]);
-															  }        
-														  },100);
-													  }
-												  };`);
-											}
-											code.push(`
-													  // ------------------------------- begin--------------------------------------
-													  ${value}
-													  // ---------------------------------end---------------------------------------
-													  //console.log("RUNNED");
-												  }
-												  if(options && "context" in options) {
-													  //console.log("OK1");
-													  //this.module = { exports : {} };
-													  //console.log(">>>?1",options.context)
-													  sandbox1.apply(options.context,[ret,pattern]);
-													  //console.log("OK2");
-												  } else {
-													  //console.log("OK3");
-													  sandbox1(ret,pattern);
-													  //console.log("OK4");
-												  }
-												  if(options && "context" in options) {
-													  //console.log("W CONTEXT",ret);
-												  } else {
-													  //console.log("WOUT CONTEXT",ret);
-												  }
-											  `);
-											code = code.join("");
-											try {
-												//console.log(code);
-												eval(code);
-											} catch (e) {
-												console.log(code);
-												console.log(e + e.stack);
-											}
-											//pel.appendChild( document.createTextNode(""+value));
-										}
-									} else {
-										
-
-											pel.appendChild(document.createTextNode("" + value));
-										
-									}
-								} else {
-									if (has_src) {
-										// load file from localStorage
-										var data = localStorage.getItem(src);
-										var el = pointer[pointer.length - 1].container.elementPush(id, "span").el;
-										el.appendChild(document.createTextNode("" + value));
-									} else {
-										if( (""+value).trim() == "" ) {
-
-										} else {
-											var el = pointer[pointer.length - 1].container.elementPush(id, "span").el;
-											el.appendChild(document.createTextNode("" + value));
-										}
-									}
-								}
-							}
-						
-						} else {
-							var el = pointer[pointer.length - 1].container.elementPush(id, tag.tagName).el;
-							var iv = self.varGet(id);
-
-							var convert_id = id;
-							var direct = false;
-
-							var toremove = [];
-							var elc = pointer[pointer.length - 1].container.elementGetContents(id);
-							if (!check) {
-								convert_id = el ? el.getAttribute("id") : elc.getAttribute(id);
-								direct = true;
-							}
-
-							if (check) {
-								ret.el[id] = el;
-								ret.$[id] = elc;
-								ret.conv[id] = el ? el.getAttribute("id") : elc.getAttribute(id);
-							}
-
-							var skip = false;
-							for (var x = 0; x < tag.attributes.length; x++) {
-								skip = false;
-								var ask_obj = {
-									type: "attribute",
-									key: tag.attributes[x].name,
-									value: tag.attributes[x].value,
-									id: convert_id,
-									element: el
-								};
-								/*
-								if(options) {
-									if( "attributes" in options ) {
-										//console.log(tag.attributes[x].name,options.attributes,"ask" in options);
-									}
-								}
-								if(options && "attributes" in options && options.attributes.indexOf( tag.attributes[x].name ) != -1) {
-									//console.log("[here1 ***]");
-									if(options && "ask" in options) {
-										//console.log("[here2]");
-										//console.log("[here3]");
-										//console.log(ask_obj);
-										var r = ask(ask_obj,ret);
-										//console.log("#attrib."+tag.attributes[x].name+":",r);
-										if(r==100) { // do not set element
-											var info = { 
-												nc_id : convert_id,
-												el : el,
-												direct : direct,
-												tagName : tag.tagName,
-												tagAttribName : tag.attributes[x].name,
-												tagAttribHasValue : tag.attributes[x].has_value,
-											};
-											if(info.tagAttribHasValue) info.tagAttribValue = tag.attributes[x].value;
-											later_attribs.push(info);
-										    
-										}
-										//console.log("[here4]");
-										skip = true;
-										//console.log("[here6 SE]",x);
-									}
-								}
-								*/
-								//console.log("SOLE TAG",tag.tagName);
-								var t = tag.attributes[x];
-								if ((!skip) && (t.name != "id")) {
-									if (t.value.charAt(0) == "\"" && t.value.charAt(t.value.length - 1) == "\"") {
-										t.value = t.value.substring(1, t.value.length - 1);
-									}
-
-
-
-									el ? el.setAttribute(t.name, t.value) : elc.setAttribute(t.name, t.value);
-								}
-							}
-							if (!check) {
-								count += 1;
-							}
-						}
-					} else {
-						stack.push(tag);
-						var id = "";
-						var check = false;
-						for (var x = 0; x < tag.attributes.length; x++) {
-							if (tag.attributes[x].name == "id") {
-								check = true;
-								if (tag.attributes[x].value == "") throw "tag with identification must have a name";
-								id += tag.attributes[x].value;
-								break;
-							}
-						}
-						if (!check) {
-							id += "_" + count;
-						}
-						//console.log(">>>>>>@@",id);
-						var pel = pointer[pointer.length - 1].container.elementPush(id, tag.tagName);
-						//console.log(">>>>>>@@",id);
-						var el = pel.el;
-						for (var x = 0; x < self.internal.WithArray.data.length; x++) {
-							var item = self.internal.WithArray.data[x];
-							//console.log(item);
-						}
-						var iv = self.varGet(id);
-
-						var convert_id = id;
-						var direct = false;
-						if (!check) {
-							//convert_id = el.getAttribute("id");
-							//direct = true;
-						}
-						var elc = pointer[pointer.length - 1].container.elementGetContents(id);
-						pointer.push({
-							element: el,
-							container: elc
-						});
-						if (check) {
-							//console.log("##",id);
-							ret.el[id] = el;
-							ret.$[id] = elc;
-							ret.conv[id] = el ? el.getAttribute("id") : elc.getAttribute("id");
-						}
-						var skip = false;
-						var props = {};
-						for (var x = 0; x < tag.attributes.length; x++) {
-							var t = tag.attributes[x];
-							try {
-								props[t.name] = parseFloat(t.value);
-								if (isNaN(props[t.name])) {
-									props[t.name] = t.value;
-								}
-							} catch (e) {
-							}
-
-						}
-						for (var x = 0; x < tag.attributes.length; x++) {
-							skip = false;
-							/*
-								var ask_obj = { 
-									type : "attribute", 
-									key : tag.attributes[x].name, 
-									value : tag.attributes[x].value, 
-									id : convert_id, 
-									element : el
-								};
-								if(options) {
-									if( "attributes" in options ) {
-										//console.log(tag.attributes[x].name,options.attributes,"ask" in options);
-									}
-								}
-								if(options && "attributes" in options && options.attributes.indexOf( tag.attributes[x].name ) != -1) {
-									//console.log("[here1 ***]");
-									if(options && "ask" in options) {
-										//console.log("[here2]");
-										//console.log("[here3]");
-										console.log(ask_obj);
-										var r = ask(ask_obj,ret);
-										console.log("#attrib."+tag.attributes[x].name+":",r);
-										//console.log("[here4]");
-										if(r==100) { // later attribs
-											var info = { 
-												nc_id : convert_id,
-												el : el,
-												direct : direct,
-												tagName : tag.tagName,
-												tagAttribName : tag.attributes[x].name,
-												tagAttribHasValue : tag.attributes[x].has_value,
-											};
-											if(info.tagAttribHasValue) info.tagAttribValue = tag.attributes[x].value;
-											later_attribs.push(info);
-										    
-										}
-										skip = true;
-										console.log("[here6 SE]",x);
-									    
-									    
-									}
-								}
-							*/
-							var t = tag.attributes[x];
-							// this feature has backend dependencies.
-							if (tag.tagName == "Component" && t.name == "src") {
-								(async () => {
-									try {
-										Import({ method: "GET", url: t.value })
-											.done((data) => {
-												var context = { module: { exports: {} }, props: props };
-												if (options && "context" in options && "bind" in props) {
-													context.parent = options.context;
-												} else {
-													context.parent = null;
-												}
-												data = data.split("\\").join("\\\\");
-												data = data.split("`").join("\\`");
-												var code = `
-												  code = (function(props,parent) {
-													  var script = "<" + "script>";
-													  var endscript = "</" + "script>";
-													  return \`${data}\`;
-												  }).apply(context,[props,context.parent]);
-											  `;
-												//console.log("1",code);
-												console.log(">>OK LOADED DYNAMIC COMPONENT SYNC", code);
-												eval(code);
-												console.log(code)
-												var schema = elc.elementSetPacket(code, { context: context });
-												console.log(">>OK LOADED DYNAMIC COMPONENT CONTEXT SYNC", context);
-												ret.exports[id] = context.module.exports;
-												ret.schema[id] = schema;
-											})
-											.fail((e) => {
-												alert("error 3" + e);
-											})
-											.send();
-									} catch (e) {
-										alert("error 4" + e);
-									}
-								})();
-							}
-							//console.log(JSON.stringify(tag));
-							if ((!skip) && t.name != "id") {
-
-								if (t.value.charAt(0) == "\"" && t.value.charAt(t.value.length - 1) == "\"") {
-									t.value = t.value.substring(1, t.value.length - 1);
-								}
-								el ? el.setAttribute(t.name, t.value) : elc.setAttribute(t.name, t.value);
-							}
-						}
-						if (!check) {
-							count += 1;
-						}
-					}
-				}
-			}
-			function clear_flags() {
-				intag = false;
-				intagname = false;
-				intagattrib = false;
-				intagattrib_key = false;
-				intagattrib_val = false;
-				intagattrib_string = false;
-				intagattrib_string2 = false;
-			}
-			if (Object.prototype.toString.apply(pattern) == "[object String]") {
-				for (var x = 0; x < pattern.length; x++) {
-					var ch = pattern.charAt(x);
-					//console.log(ch);
-
-					/*					
-					console.log(x,ch,pattern.substring(x),
-						"intag",intag,
-						"intagname",intagname,
-						"intagattrib",intagattrib,
-						"intagattrib_key",intagattrib_key,
-						"intagattrib_val",intagattrib_val,
-						"intagattrib_string",intagattrib_string
-					);
-					*/
-					if (!intag) {
-						var checkHigh = false;
-						var tag1 = null;
-						if (stack.length > 0) {
-							tag1 = stack[stack.length - 1].tagName;
-							var tag2 = tag1.toUpperCase()
-							checkHigh = (tag2 == "SCRIPT" || tag2 == "PRE" || tag2 == "STYLE");
-						}
-						if (ch == "<" && checkHigh) {
-							var str2 = "</" + tag1 + ">";
-							if (pattern.indexOf(str2, x) == x) {
-								if (text != "") {
-									current = { tagName: "text", endTag: false, soleTag: true, attributes: [{ name: "value", value: text, has_value: true }] };
-									clear_flags(); tag_handle(current);
-									text = "";
-								}
-								current = { tagName: tag1, endTag: true, soleTag: false, attributes: [] };
-								clear_flags(); tag_handle(current);
-								x += (str2.length - 1);
-								continue;
-							} else {
-								text += ch;
-								continue;
-							}
-						} else if (ch == "<") {
-							if (text != "") {
-								current = { tagName: "text", endTag: false, soleTag: true, attributes: [{ name: "value", value: text, has_value: true }] };
-								clear_flags(); tag_handle(current);
-							}
-							if (pattern.indexOf("<!", x) == x) {
-							} else if (pattern.indexOf("<!-", x) == x) {
-							} else if (pattern.indexOf("<!--", x) == x) {
-								var end = pattern.indexOf("-->");
-								if (end != -1) x = end;
-								else x = pattern.length;
-								continue;
-							} else if (pattern.indexOf("<![CDATA[", x) == x) {
-								throw "CDATA not implemented.";
-							} else {
-								// find comments
-								intag = true;
-								intagname = true;
-								intagattrib = false;
-								while (x + 1 < pattern.length && (pattern.charAt(x + 1) == " " || pattern.charAt(x + 1) == "\t" || pattern.charAt(x + 1) == "\r" || pattern.charAt(x + 1) == "\n")) x += 1;
-								if (x + 1 < pattern.length && pattern.charAt(x + 1) == "/") {
-									//console.log("mark end tag",pattern.substring(x));
-									x += 1;
-									current = { tagName: "", endTag: true, soleTag: false, attributes: [] };
-								} else {
-									//console.log("mark tag start",pattern.substring(x));
-									current = { tagName: "", endTag: false, soleTag: false, attributes: [] };
-								}
-							}
-							text = "";
-						} else {
-							text += ch;
-						}
-					} else {
-						if (intagname) {
-							if (ch == "/") {
-								while (x + 1 < pattern.length && (pattern.charCodeAt(x + 1) == " " || pattern.charCodeAt(x + 1) == "\t" || pattern.charCodeAt(x + 1) == "\r" || pattern.charCodeAt(x + 1) == "\n")) x += 1;
-								if (x + 1 < pattern.length && pattern.charAt(x + 1) == ">") {
-									clear_flags(); current.soleTag = true; tag_handle(current);
-									x++;
-								} else {
-									//console.log(x,pattern.substring(x));
-									throw "unexpected tag end";
-								}
-							} else if (ch == ">") {
-								clear_flags(); tag_handle(current);
-							} else if (ch == " " || ch == "\t" || ch == "\r" || ch == "\n") {
-								intagname = false;
-								intagattrib = false;
-							} else {
-								current.tagName += ch;
-							}
-						} else if (intagattrib) {
-							if (intagattrib_key) {
-								if (ch == " " || ch == "\t" || ch == "\r" || ch == "\n") {
-									intagattrib = false;
-									current_attribute = null;
-								} else if (ch == ">") {
-									clear_flags(); tag_handle(current);
-								} else if (ch == "/") {
-									while (x + 1 < pattern.length && pattern.charCodeAt(x + 1) == " ") x += 1;
-									if (x + 1 < pattern.length && pattern.charAt(x + 1) == ">") {
-										clear_flags(); current.soleTag = true; tag_handle(current);
-										x++;
-									} else throw "unexpected tag end";
-								} else if (ch == "=") {
-									intagattrib_key = false;
-									intagattrib_val = true;
-								} else {
-									current_attribute.name += ch;
-								}
-
-							} else if (intagattrib_val) {
-								if (intagattrib_string) {
-									if (ch == "\"") {
-										current_attribute = null;
-										intagattrib = false;
-										intagattrib_key = false;
-										intagattrib_val = false;
-										intagattrib_string = false;
-									} else {
-										current_attribute.has_value = true;
-										current_attribute.value += ch;
-									}
-								} else if (intagattrib_string2) {
-									if (ch == "'") {
-										current_attribute = null;
-										intagattrib = false;
-										intagattrib_key = false;
-										intagattrib_val = false;
-										intagattrib_string2 = false;
-									} else {
-										current_attribute.has_value = true;
-										current_attribute.value += ch;
-									}
-								} else {
-									if (current_attribute.value == "" && ch == "\"") {
-										intagattrib_string = true;
-									} else if (current_attribute.value == "" && ch == "'") {
-										intagattrib_string2 = true;
-									} else if (ch == "/") {
-										while (x + 1 < pattern.length && (pattern.charCodeAt(x + 1) == " " || pattern.charCodeAt(x + 1) == "\t" || pattern.charCodeAt(x + 1) == "\r" || pattern.charCodeAt(x + 1) == "\n")) x += 1;
-										if (x + 1 < pattern.length && pattern.charAt(x + 1) == ">") {
-											clear_flags(); current.soleTag = true; tag_handle(current);
-											x++;
-										} else throw "unexpected tag end";
-									} else if (ch == ">") {
-										clear_flags();
-										tag_handle(current);
-									} else if (ch != " " && ch != "\t" && ch != "\r" && ch != "\n") {
-										current_attribute.has_value = true;
-										current_attribute.value += ch;
-										current_attribute.value = current_attribute.value.trim();
-									} else {
-										intagattrib = false;
-										intagattrib_key = false;
-										intagattrib_val = false;
-										intagattrib_string = false;
-										current_attribute = null;
-									}
-								}
-							} else {
-								while ((pattern.charAt(x) == " " || pattern.charAt(x) == "\t" || pattern.charAt(x) == "\r" || pattern.charAt(x) == "\n") && x < pattern.length) x += 1;
-								if (x == pattern.length) throw "unexpected tag end";
-								ch = pattern.charAt(x);
-								if (ch == "/") {
-									while (x + 1 < pattern.length && (pattern.charCodeAt(x + 1) == " " || pattern.charCodeAt(x + 1) == "\t" || pattern.charCodeAt(x + 1) == "\r" || pattern.charCodeAt(x + 1) == "\n")) x += 1;
-									if (x + 1 < pattern.length && pattern.charAt(x + 1) == ">") {
-										clear_flags(); current.soleTag = true; tag_handle(current);
-										x++;
-									} else {
-										throw "unexpected tag end";
-									}
-								} else if (ch == ">") {
-									clear_flags(); tag_handle(current);
-								} else {
-									intagattrib = true;
-									intagattrib_key = true;
-									intagattrib_val = false;
-									var attrib = {};
-									attrib.name = ch;
-									attrib.value = "";
-									attrib.has_value = false;
-									current.attributes.push(attrib);
-									current_attribute = attrib;
-								}
-							}
-						} else {
-							if (ch == " " || ch == "\t" || ch == "\n" || ch == "\r") {
-								continue;
-							}
-							else if (ch == "/") { // sole tag
-								while (x + 1 < pattern.length && pattern.charCodeAt(x + 1) == " ") x += 1;
-								if (x + 1 < pattern.length && pattern.charAt(x + 1) == ">") {
-									clear_flags(); current.soleTag = true; tag_handle(current);
-									x++;
-								} else {
-									throw "unexpected tag end";
-								}
-							} else if (ch == ">") {
-								clear_flags(); tag_handle(current);
-							} else { // attrib init
-								//console.log("@",ch,ch.charCodeAt(0));
-								intagname = false;
-								intagattrib = true;
-								intagattrib_key = true;
-								intagattrib_val = false;
-								var attrib = {};
-								attrib.has_value = false;
-								attrib.name = ch;
-								attrib.value = "";
-								current.attributes.push(attrib);
-								current_attribute = attrib;
-							}
-						}
-					}
-				}
-				if (text != "") {
-					//text = text.split("\r").join("").split("\n").join(" ");
-					current = { tagName: "text", endTag: false, soleTag: true, attributes: [{ name: "value", value: text, has_value: true }] };
-					clear_flags(); tag_handle(current);
-				}
-			}
-			/*
-			console.log("LATER ATTRIBS:",later_attribs.length);
-			for(var x = 0; x < later_attribs.length;x++) {
-				console.log(later_attribs[x].tagName);
-				var info = { type : "later_attribute", key : later_attribs[x].tagAttribName };
-				if( later_attribs[x].tagAttribHasValue ) {
-					info.value = later_attribs[x].tagAttribValue;
-				}
-				console.log(ret);
-				var r = ask(info,ret);
-				console.log( later_attribs[x], r.key, r.value );
-				if(r.key==null && r.value==null) {
-				    
-				} else {
-					if("svg" in r && r.svg) {
-						if(later_attribs[x].direct) {
-							document.getElementById( later_attribs[x].nc_id ).setAttributeNS( 'http://www.w3.org/1999/xlink',r.key, r.value );
-						} else {
-							ret.el[later_attribs[x].nc_id].setAttributeNS( 'http://www.w3.org/1999/xlink',r.key,r.value );
-						}
-					} else {
-						if(later_attribs[x].direct) {
-							document.getElementById( later_attribs[x].nc_id ).setAttribute( r.key, r.value );
-						} else {
-							ret.el[later_attribs[x].nc_id].setAttribute( r.key,r.value );
-						}
-					}
-				}
-			}
-			*/
-			return ret;
-		}
+		
 		var newPacketAsync = async function (parent, pattern, options) {
+			
+
+			DEBUG_COMPONENT_LEVEL += 1;
+			console.log("LEVEL:",DEBUG_COMPONENT_LEVEL);
 			//pattern = pattern.split("\r").join("").split("\n").join("").split("\t").join(" ");
-			//console.log(pattern);
+			console.log(pattern);
 			options = options || {
 				runMacro : true
 			};
@@ -4838,6 +4152,7 @@ Class.define("Component", {
 			async function tag_handle(tag) {
 				var waitAsync = false;
 				var waitTarget = {};
+				//console.log(tag.tagName);
 				if (tag.endTag) {
 					
 					if (stack.length > 0 && stack[stack.length - 1].tagName == tag.tagName) {
@@ -5054,11 +4369,11 @@ Class.define("Component", {
 										el.appendChild(document.createTextNode("" + value));
 									} else {
 										if( (""+value).trim() == "" ) {
+
 										} else {
 											var el = pointer[pointer.length - 1].container.elementPush(id, "span").el;
 											el.appendChild(document.createTextNode("" + value));
 										}
-
 									}
 								}
 							}
@@ -5253,51 +4568,59 @@ Class.define("Component", {
 							if (tag.tagName == "Component" && t.name == "src") {
 								await (async () => {
 									//console.log("EVAL COMPONENT SRC", t.value);
-									return new Promise((resolve, reject) => {
-										try {
-											
-											Import({ method: "GET", url: t.value })
-												.done(async (data) => {
-													//console.log("EVAL COMPONENT SRC", data);
-													var context = { module: { exports: {} }, props: props };
-
-													if (options && "context" in options && "bind" in props) {
-														context.parent = options.context;
-													} else {
-														context.parent = null;
-													}
-													// 1) evaluate ${} in the downloaded content, make parent, props, this available could handle programmatically html on components
-													// hard to eval cause it may have `` inside script tag
-													// 2) create new components <if> <endif> <for> <endfor> <while> (bullshit?)
-													
-
-													//console.log(">>OK LOADED DYNAMIC COMPONENT ASYNC", code);
-													//eval(code);
-													//console.log(data);
-													var schema = await elc.elementSetPacketAsync(data, { context: context });
-													//console.log(">>OK LOADED DYNAMIC COMPONENT CONTEXT ASYNC", context);
-													ret.exports[id] = context.module.exports;
-													ret.schema[id] = schema;
-													if(options && options.context && check) {
+									var data = null;
+									if(!(t.value in ComponentCache)) {
+										data = await new Promise((resolve, reject) => {
+											try {
+												
+												Import({ method: "GET", url: t.value })
+													.done(async (data) => {
+														//console.log("EVAL COMPONENT SRC", data);
+														ComponentCache[t.value] = data;
+														resolve(data);
 														
-														options.context[id].exports = context.module.exports;
-														options.context[id].schema = schema;
-													}
-													tag.isCustom = true;
-													tag.data = {
-														schema : schema
-													}
-													resolve();
-												})
-												.fail((e) => {
-													alert("error 2:" + e);
-													reject();
-												})
-												.send();
-										} catch (e) {
-											alert("error 1:" + e);
-										}
-									});
+													})
+													.fail((e) => {
+														alert("error 2:" + e);
+														reject();
+													})
+													.send();
+											} catch (e) {
+												alert("error 1:" + e);
+											}
+										}); 
+									} else {
+										data = ComponentCache[t.value];
+									}
+									var context = { module: { exports: {} }, props: props };
+
+									if (options && "context" in options && "bind" in props) {
+										context.parent = options.context;
+									} else {
+										context.parent = null;
+									}
+									// 1) evaluate ${} in the downloaded content, make parent, props, this available could handle programmatically html on components
+									// hard to eval cause it may have `` inside script tag
+									// 2) create new components <if> <endif> <for> <endfor> <while> (bullshit?)
+									
+
+									//console.log(">>OK LOADED DYNAMIC COMPONENT ASYNC", code);
+									//eval(code);
+									//console.log(data);
+									var schema = await elc.elementSetPacketAsync(data, { context: context });
+									//console.log(">>OK LOADED DYNAMIC COMPONENT CONTEXT ASYNC",data);
+									ret.exports[id] = context.module.exports;
+									ret.schema[id] = schema;
+									if(options && options.context && check) {
+										
+										options.context[id].exports = context.module.exports;
+										options.context[id].schema = schema;
+									}
+									tag.isCustom = true;
+									tag.data = {
+										schema : schema
+									}
+									
 								})();
 								//console.log("after component src eval");
 							}
@@ -5354,7 +4677,7 @@ Class.define("Component", {
 			if (Object.prototype.toString.apply(pattern) == "[object String]") {
 				for (var x = 0; x < pattern.length; x++) {
 					var ch = pattern.charAt(x);
-					//console.log(ch);
+					//console.log(ch,DEBUG_COMPONENT_LEVEL);
 
 					/*
 					console.log(x,ch,pattern.substring(x),
@@ -5731,27 +5054,9 @@ Class.define("Component", {
 				}
 			}
 			*/
+			DEBUG_COMPONENT_LEVEL--;
 			return ret;
 		}
-
-		this.elementPushPacket = function () {
-			var parent;
-			if (arguments.length == 1) { // doc
-				parent = this.elementPush("Component");
-				return newPacket(parent.$, arguments[0]);
-			} else if (arguments.length == 2) { // name,doc
-				if (
-					Object.prototype.toString.apply(arguments[1]) == "[object Object]" &&
-					Object.prototype.toString.apply(arguments[0]) == "[object String]"
-				) {
-					parent = this.elementPush("Component");
-					return newPacket(parent.$, arguments[0], arguments[1]);
-				} else {
-					parent = this.elementPush(arguments[0], "Component");
-					return newPacket(parent.$, arguments[1]);
-				}
-			}
-		};
 		this.elementPushPacketAsync = async function () {
 			var parent;
 			if (arguments.length == 1) { // doc
@@ -5767,24 +5072,6 @@ Class.define("Component", {
 				} else {
 					parent = this.elementPush(arguments[0], "Component");
 					return await newPacketAsync(parent.$, arguments[1]);
-				}
-			}
-		};
-		this.elementUnshiftPacket = function () {
-			var parent;
-			if (arguments.length == 1) {
-				parent = this.elementUnshift("Component");
-				return newPacket(parent.$, arguments[0]);
-			} else if (arguments.length == 2) {
-				if (
-					Object.prototype.toString.apply(arguments[1]) == "[object Object]" &&
-					Object.prototype.toString.apply(arguments[0]) == "[object String]"
-				) {
-					parent = this.elementUnshift("Component");
-					return newPacket(parent.$, arguments[0], arguments[1]);
-				} else {
-					parent = this.elementUnshift(arguments[0], "Component");
-					return newPacket(parent.$, arguments[1]);
 				}
 			}
 		};
@@ -6187,6 +5474,7 @@ Class.define("UI.Body", {
 			i.__selectstart_event = function (e) { e.preventDefault(); return false; };
 
 		}, proto: {
+			debug : true,
 			nodeDispose: function () {
 				TabIndexCount.reset(1);
 				//this.container.nodeDispose(); // remove all only inside div:container, which is permanent
@@ -6197,14 +5485,18 @@ Class.define("UI.Body", {
 				// check data ready
 
 				// render
-				UI.Body.elementRender(time);
+				//UI.Body.elementRender(time);
 				// the caller are in UI.load, UI.init -> so it's self calling if initialized
-
-				if (UI.Body.debug) {
+				console.log("RENDER LOOP");
+				console.log(UI);
+				if (this.debug) {
 					//console.log("debug");
 					setTimeout(UI.Body.RenderLoop, 0);
 				} else {
-					requestAnimationFrame(UI.Body.RenderLoop);
+					console.log(this);
+					console.log(UI.Body.RenderLoop);
+					//throw "OK";
+					//requestAnimationFrame(this.RenderLoop);
 				}
 
 			},
@@ -6632,11 +5924,11 @@ Object.defineProperty(window,"CHistory",{
 	writeable:false
 });
 
-UI.init = function (callback) {
+UI.init = function (callback,clear) {
 
 	var self = this;
 
-	self.Body = null;
+	//self.Body = null;
 
 	this.Window = Class.create("UI.Window");
 
@@ -6647,42 +5939,47 @@ UI.init = function (callback) {
 		//console.log("focus");
 		window.focus();
 
+		self.Body = Class.create("UI.Body");
+		self.Body.nodeBuild(document.body, null);
+
+
 		// clear all previous html components, that might be saved with save file.
-		var body = document.getElementsByTagName("body")[0];
-		body.visited = false;
-		var stack = [body];
-		// remove leafs before
-		var k = 0;
-		while (stack.length > 0) {
-			var item = stack.pop();
-			var pushed = false;
-			if (item.childNodes.length > 0 && item.visited == false) {
-				item.visited = true;
-				stack.push(item);
-				for (var x = 0; x < item.childNodes.length; x++) {
-					item.childNodes[x].visited = false;
-					stack.push(item.childNodes[x]);
+		if(clear !== false) clear = true;
+		if(clear) {
+			var body = document.getElementsByTagName("body")[0];
+			body.visited = false;
+			var stack = [body];
+			// remove leafs before
+			var k = 0;
+			while (stack.length > 0) {
+				var item = stack.pop();
+				var pushed = false;
+				if (item.childNodes.length > 0 && item.visited == false) {
+					item.visited = true;
+					stack.push(item);
+					for (var x = 0; x < item.childNodes.length; x++) {
+						item.childNodes[x].visited = false;
+						stack.push(item.childNodes[x]);
+					}
+					pushed = true;
 				}
-				pushed = true;
-			}
-			var removed = false;
-			if (!pushed && stack.length > 0 && item != body) { // leaf
-				if (item.parentNode != null) {
+				var removed = false;
+				if (!pushed && stack.length > 0 && item != body) { // leaf
+					if (item.parentNode != null) {
+						item.parentNode.removeChild(item);
+					}
+					removed = true;
+				}
+				if (item.visited && !removed && stack.length > 0 && item != body) { // maybe not leaf but already used
+					console.log("rm", item);
 					item.parentNode.removeChild(item);
+					removed = true;
 				}
-				removed = true;
-			}
-			if (item.visited && !removed && stack.length > 0 && item != body) { // maybe not leaf but already used
-				console.log("rm", item);
-				item.parentNode.removeChild(item);
-				removed = true;
 			}
 		}
-		//console.log("[UI.boot]");
+		console.log("[UI.boot]");
 
-		self.Body = Class.create("UI.Body");
-
-		self.Body.nodeBuild(document.body, null);
+		
 
 		self.Window.internal["UI.Window"].loaded = true;
 
@@ -6795,3 +6092,10 @@ Class.define("DeviceResolution", {
 		
 	}
 });
+
+/*
+
+var data = Class.create("UI.Body");
+self.Body.nodeBuild(document.body, null);
+
+*/
