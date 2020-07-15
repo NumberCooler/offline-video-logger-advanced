@@ -1539,6 +1539,167 @@ var JsExpression = (function () {
 	};
 })();
 
+
+var Binary = {};
+
+Binary.ab162str = function(buf) {
+    return String.fromCharCode.apply(null, new Uint16Array(buf));
+}
+Binary.str2ab16 = function(str) {
+    var buf = new ArrayBuffer(str.length*2); // 2 bytes for each char
+    var bufView = new Uint16Array(buf);
+    for (var i=0, strLen=str.length; i<strLen; i++) {
+        bufView[i] = str.charCodeAt(i);
+    }
+    return buf;
+}
+
+
+Binary.ab322str = function(buf) {
+    return String.fromCharCode.apply(null, new Uint32Array(buf));
+}
+Binary.str2ab32 = function(str) {
+    var buf = new ArrayBuffer(str.length*4); // 2 bytes for each char
+    var bufView = new Uint32Array(buf);
+    for (var i=0, strLen=str.length; i<strLen; i++) {
+        bufView[i] = str.codePointAt(i);
+    }
+    return buf;
+}
+Binary.str2utf8ab = function(str) {
+    var list = [];
+    for(let c of str) {
+        var code = c.codePointAt(0);
+        if(code >= 0 && code <= 0x7f) {
+            list.push(code);
+        } else if(code >= 0x80 && code <= 0x7ff) {
+            list.push( 0xC0 | ( (0x7C0 & code) >>6 ));
+            list.push( 0x80 | (0x3F & code) );
+        } else if(code >= 0x800 && code <= 0xFFFF) {
+            list.push( 0xE0 | ( (0xF000 & code) >> 12 ));
+            list.push( 0x80 | ( (0x0FC0 & code) >> 6 ));
+            list.push( 0x80 | (0x3F & code) );
+        } else if(code >= 0x10000 && code <= 0x1fffff) {
+            list.push( 0xF0 | ((0x1C0000 & code) >> 18));
+            list.push( 0x80 | ((0x03F000 & code) >> 12 ));
+            list.push( 0x80 | ((0x000FC0 & code) >> 6 ));
+            list.push( 0x80 | ((0x00003F & code) ));
+        } else {
+            throw new Error("string is not a utf8, bug on charCodeAt.");
+        }
+    }
+    var buf = new ArrayBuffer(list.length);
+    var bufView = new Uint8Array(buf);
+    for(var x = 0; x < list.length;x++)
+        bufView[x] = list[x];
+    return buf;
+}
+Binary.utf8ab2str = function(ab,size) {
+    var u8a = new Uint8Array(ab,0,size);
+    var p = 0;
+    var str = [];
+    while(p < size) {
+        if( (u8a[p] & 0x80) == 0x80 ) {
+            // 2, 3 or 4 bytes
+            if( (u8a[p] & 0xE0) == 0xE0 ) {
+                if( (u8a[p] & 0xF0) == 0xF0 ) { // 4 bytes
+                    if(p+3 < size) {
+                        str.push( String.fromCodePoint( ( ( u8a[p] & 0x7 ) << 18 ) | ( ( u8a[p+1] & 0x3F ) << 12 ) | ( ( u8a[p+2] & 0x3F ) << 6 ) | ( ( u8a[p+3] & 0x3F ) ) ) );
+                        p+=4;
+                    } else {
+                        throw new Error("bad utf8 (3):" + p);
+                    }
+                } else if(p+2<size) { // 3 bytes
+                    str.push( String.fromCodePoint( ( u8a[p+2] & 0x3F ) | ( ( u8a[p+1] & 0x3F ) << 6 ) | (( u8a[p] & 0x0F ) << 12 ) ) );
+                    p+=3;
+                } else {
+                    throw new Error("bad utf8 (2):"+p);    
+                }
+            } else if(p+1 < size) { // 2 bytes
+                str.push(String.fromCodePoint( (u8a[p+1] & 0x3F) | ( (u8a[p] & 0x1F) << 6) ));
+                p+=2;
+            } else {
+                throw new Error("bad utf8 (1):"+p);
+            }
+        } else { // 1 byte
+            str.push(String.fromCodePoint(0x7F & u8a[p]));
+            p++;
+        }
+    }
+    return str.join("");
+}
+function BinaryWriter() {
+    this.data = [];
+}
+
+BinaryWriter.prototype.u8 = function(val) {
+    if(Type.value(val) != "[object Number]") throw new Error("BinaryWriter.u8 : val must be a number");
+    if(val<0 && val > 255) throw new Error("BinaryWriter.i8 : val is out of bounds.");
+    var arr = new Uint8Array(1);
+    arr[0] = val;
+    this.data.push(arr);
+    return this;
+}
+BinaryWriter.prototype.u16 = function(val) {
+    if(Type.value(val) != "[object Number]") throw new Error("BinaryWriter.u16 : val must be a number");
+    if(val<0 && val > 65535) throw new Error("BinaryWriter.i16 : val is out of bounds.");
+    var arr = new Uint16Array(1);
+    arr[0] = val;
+    this.data.push(arr);
+    return this;
+}
+BinaryWriter.prototype.u32 = function(val) {
+    if(Type.value(val) != "[object Number]") throw new Error("BinaryWriter.u32 : val must be a number");
+    if(val<0 && val > 4294967295) throw new Error("BinaryWriter.u32 : val is out of bounds.");
+    var arr = new Uint32Array(1);
+    arr[0] = val;
+    this.data.push(arr);
+    return this;
+}
+BinaryWriter.prototype.add = function(array_buffer) {
+    if(Type.value(array_buffer) != "[object ArrayBuffer]") throw new Error("BinaryWriter.add : val must be ArrayBuffer");
+    this.data.push(array_buffer);
+    return this;
+}
+BinaryWriter.prototype.blob = function(){
+    return new Blob(this.data);
+}
+
+function BinaryReader(blob,array_buffer) {
+    this.blob = blob;
+    var self = this;
+    this.pos = 0;
+    this.data = array_buffer;
+}
+BinaryReader.prototype.u8 = function() {
+    var dv = new DataView(this.data,this.pos,1);
+    this.pos += 1;
+    return dv.getUint8(0,true);
+}
+BinaryReader.prototype.u16 = function() {
+    var dv = new DataView(this.data,this.pos,2);
+    this.pos += 2;
+    return dv.getUint16(0,true);
+}
+BinaryReader.prototype.u32 = function() {
+    console.log("POS",this.pos);
+    var dv = new DataView(this.data,this.pos,4);
+    this.pos += 4;
+    return dv.getUint32(0,true);
+}
+BinaryReader.prototype.toBlob = function(size) {
+
+    console.log("POS",this.pos,size);
+    var p = this.pos;
+    this.pos += size;
+    console.log("POS",this.pos);
+    return this.blob.slice(p, p+size);
+}
+BinaryReader.prototype.seek = function(rel) {
+    this.pos += rel;
+}
+
+
 var util = {};
 util.extend = function (target, ext) {
 	for (var prop in ext) {

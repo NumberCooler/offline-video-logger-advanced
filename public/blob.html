@@ -1,6 +1,7 @@
 <div>hello</div>
 
 <div id="_debug"></div>
+<Component id="download" src="download.html"></Component>
 
 <script>
 
@@ -28,14 +29,14 @@ Binary.str2ab32 = function(str) {
     var buf = new ArrayBuffer(str.length*4); // 2 bytes for each char
     var bufView = new Uint32Array(buf);
     for (var i=0, strLen=str.length; i<strLen; i++) {
-        bufView[i] = str.charCodeAt(i);
+        bufView[i] = str.codePointAt(i);
     }
     return buf;
 }
 Binary.str2utf8ab = function(str) {
     var list = [];
-    for(var x = 0; x < str.length;x++) {
-        var code = str.charCodeAt(x);
+    for(let c of str) {
+        var code = c.codePointAt(0);
         if(code >= 0 && code <= 0x7f) {
             list.push(code);
         } else if(code >= 0x80 && code <= 0x7ff) {
@@ -70,25 +71,25 @@ Binary.utf8ab2str = function(ab,size) {
             if( (u8a[p] & 0xE0) == 0xE0 ) {
                 if( (u8a[p] & 0xF0) == 0xF0 ) { // 4 bytes
                     if(p+3 < size) {
-                        str.push( String.fromCharCode( ( ( u8a[p] & 0x7 ) << 18 ) | ( ( u8a[p+1] & 0x3F ) << 12 ) | ( ( u8a[p+2] & 0x3F ) << 6 ) | ( ( u8a[p+3] & 0x3F ) ) ) );
+                        str.push( String.fromCodePoint( ( ( u8a[p] & 0x7 ) << 18 ) | ( ( u8a[p+1] & 0x3F ) << 12 ) | ( ( u8a[p+2] & 0x3F ) << 6 ) | ( ( u8a[p+3] & 0x3F ) ) ) );
                         p+=4;
                     } else {
                         throw new Error("bad utf8 (3):" + p);
                     }
                 } else if(p+2<size) { // 3 bytes
-                    str.push( String.fromCharCode( ( u8a[p+2] & 0x3F ) | ( ( u8a[p+1] & 0x3F ) << 6 ) | (( u8a[p] & 0x0F ) << 12 ) ) );
+                    str.push( String.fromCodePoint( ( u8a[p+2] & 0x3F ) | ( ( u8a[p+1] & 0x3F ) << 6 ) | (( u8a[p] & 0x0F ) << 12 ) ) );
                     p+=3;
                 } else {
                     throw new Error("bad utf8 (2):"+p);    
                 }
             } else if(p+1 < size) { // 2 bytes
-                str.push(String.fromCharCode( (u8a[p+1] & 0x3F) | ( (u8a[p] & 0x1F) << 6) ));
+                str.push(String.fromCodePoint( (u8a[p+1] & 0x3F) | ( (u8a[p] & 0x1F) << 6) ));
                 p+=2;
             } else {
                 throw new Error("bad utf8 (1):"+p);
             }
         } else { // 1 byte
-            str.push(String.fromCharCode(0x7F & u8a[p]));
+            str.push(String.fromCodePoint(0x7F & u8a[p]));
             p++;
         }
     }
@@ -104,6 +105,7 @@ BinaryWriter.prototype.u8 = function(val) {
     var arr = new Uint8Array(1);
     arr[0] = val;
     this.data.push(arr);
+    return this;
 }
 BinaryWriter.prototype.u16 = function(val) {
     if(Type.value(val) != "[object Number]") throw new Error("BinaryWriter.u16 : val must be a number");
@@ -111,6 +113,7 @@ BinaryWriter.prototype.u16 = function(val) {
     var arr = new Uint16Array(1);
     arr[0] = val;
     this.data.push(arr);
+    return this;
 }
 BinaryWriter.prototype.u32 = function(val) {
     if(Type.value(val) != "[object Number]") throw new Error("BinaryWriter.u32 : val must be a number");
@@ -118,14 +121,51 @@ BinaryWriter.prototype.u32 = function(val) {
     var arr = new Uint32Array(1);
     arr[0] = val;
     this.data.push(arr);
-}
-BinaryWriter.prototype.blob = function(){
-    return new Blob(this.data);
+    return this;
 }
 BinaryWriter.prototype.add = function(array_buffer) {
     if(Type.value(array_buffer) != "[object ArrayBuffer]") throw new Error("BinaryWriter.add : val must be ArrayBuffer");
     this.data.push(array_buffer);
+    return this;
 }
+BinaryWriter.prototype.blob = function(){
+    return new Blob(this.data);
+}
+
+function BinaryReader(blob,array_buffer) {
+    this.blob = blob;
+    var self = this;
+    this.pos = 0;
+    this.data = array_buffer;
+}
+BinaryReader.prototype.u8 = function() {
+    var dv = new DataView(this.data,this.pos,1);
+    this.pos += 1;
+    return dv.getUint8(0,true);
+}
+BinaryReader.prototype.u16 = function() {
+    var dv = new DataView(this.data,this.pos,2);
+    this.pos += 2;
+    return dv.getUint16(0,true);
+}
+BinaryReader.prototype.u32 = function() {
+    console.log("POS",this.pos);
+    var dv = new DataView(this.data,this.pos,4);
+    this.pos += 4;
+    return dv.getUint32(0,true);
+}
+BinaryReader.prototype.toBlob = function(size) {
+
+    console.log("POS",this.pos,size);
+    var p = this.pos;
+    this.pos += size;
+    console.log("POS",this.pos);
+    return this.blob.slice(p, p+size);
+}
+BinaryReader.prototype.seek = function(rel) {
+    this.pos += rel;
+}
+
 log("OK");
 log(Type.value(1));
 
@@ -137,22 +177,45 @@ var bw = new BinaryWriter();
 //bw.u8(10);
 //bw.u16(100);
 bw.u32(1000);
+
 var blob2 = bw.blob();
 console.log(blob2);
+console.log(">>>");
+var str = "<!doctype html><html><body>test竜❤</body></html>";
+var str2 = "<!doctype html><html><body>test竜❤2</body></html>";
+var str_ab = Binary.str2utf8ab(str);
+var str2_ab = Binary.str2utf8ab(str2);
 
-var blob3 = new Blob([ Binary.str2utf8ab("teste❤") ]);
+
+console.log( Binary.str2utf8ab(str).byteLength );
+console.log( str_ab.byteLength );
+var blob3 = new Blob( 
+    new BinaryWriter().u32(str_ab.byteLength).data.concat([str_ab]) 
+        .concat(
+            new BinaryWriter().u32(str2_ab.byteLength).data.concat([str2_ab])
+        )
+);
+
 console.log(blob3);
-var ab = await blob3.arrayBuffer();
-var u8a = new Uint8Array(ab, 0, 8);
-var u8a1 = new Uint8Array(ab, 0, 8);
-console.log(u8a);
-console.log( Binary.utf8ab2str(ab,8) );
+console.log(download.exports);
+download.exports.go(blob3,"test.myformat");
+var abx = await blob3.arrayBuffer();
+console.log("MAIN AB",abx);
+var br = new BinaryReader(blob3,abx);
+var sz = br.u32();
+console.log("u32",sz);
+var blobx = br.toBlob(sz);
+var ab2 = await blobx.arrayBuffer();
+var u8a = new Uint8Array(ab2, 0, ab2.byteLength);
+console.log( Binary.utf8ab2str(ab2,ab2.byteLength) );
+var sz2 = br.u32();
+console.log("u32",sz2);
+var blobx2 = br.toBlob(sz2);
+var ab3 = await blobx2.arrayBuffer();
+console.log(ab3);
+var u8a2 = new Uint8Array(ab3,0,ab3.byteLength);
+console.log( Binary.utf8ab2str(ab3,ab3.byteLength ));
+//console.log(u8a);
 
-console.log(u8a);
 
-
-/*
-
-
-*/
 </script>

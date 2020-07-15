@@ -1,6 +1,7 @@
 node_modules/
 config.js
 public/messages/user1/
+public/messages/backup/
 package-lock.json
 public/doc.html
 public/doc2.html
