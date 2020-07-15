@@ -5,6 +5,7 @@ public/messages/backup/
 package-lock.json
 public/doc.html
 public/doc2.html
+public/doc3.html
 public/js/workers/
 public/recorder.html
 public/sample.mp3

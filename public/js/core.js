@@ -1594,6 +1594,30 @@ Binary.str2utf8ab = function(str) {
         bufView[x] = list[x];
     return buf;
 }
+Binary.str2bytes = function(str) {
+    var list = [];
+    for(let c of str) {
+        var code = c.codePointAt(0);
+        if(code >= 0 && code <= 0x7f) {
+            list.push(code);
+        } else if(code >= 0x80 && code <= 0x7ff) {
+            list.push( 0xC0 | ( (0x7C0 & code) >>6 ));
+            list.push( 0x80 | (0x3F & code) );
+        } else if(code >= 0x800 && code <= 0xFFFF) {
+            list.push( 0xE0 | ( (0xF000 & code) >> 12 ));
+            list.push( 0x80 | ( (0x0FC0 & code) >> 6 ));
+            list.push( 0x80 | (0x3F & code) );
+        } else if(code >= 0x10000 && code <= 0x1fffff) {
+            list.push( 0xF0 | ((0x1C0000 & code) >> 18));
+            list.push( 0x80 | ((0x03F000 & code) >> 12 ));
+            list.push( 0x80 | ((0x000FC0 & code) >> 6 ));
+            list.push( 0x80 | ((0x00003F & code) ));
+        } else {
+            throw new Error("string is not a utf8, bug on charCodeAt.");
+        }
+	}
+	return list;
+}
 Binary.utf8ab2str = function(ab,size) {
     var u8a = new Uint8Array(ab,0,size);
     var p = 0;

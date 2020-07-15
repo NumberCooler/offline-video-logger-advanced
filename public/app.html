@@ -2,15 +2,29 @@
     this.fail = false;
     var self = this;
     try {
+        /*
         var a = await fetch("/ping",{method:"POST"});
         if(a.status==404) {
             this.fail = true;
             self.props.fail();
         }
+        */
     } catch(e) {
         this.fail = true;
         self.props.fail();
     }
+
+    this.refresh_list = new Promise((resolve,reject)=>{
+        Import({url:"/list",method:"GET"})
+        .done((data)=>{
+            //alert(data);
+            var json = JSON.parse(data);
+            resolve(json);
+            
+        })
+        .send();
+    });
+
 </script>
 <style>
     body {
@@ -167,6 +181,33 @@ this.app = {
     hasAudioTracks : function () { for(var x = 0; x < this.tracks.length;x++) if(this.tracks[x].type == "audio") return true; return false; },
     hasVideoTracks : function () { for(var x = 0; x < this.tracks.length;x++) if(this.tracks[x].type == "video") return true; return false; }
 };
+
+
+async function refresh_list(update) {
+    var data = null;
+    if(update) {
+        data = await new Promise((resolve,reject)=>{
+            Import({url:"/list",method:"GET"})
+            .done((data)=>{
+                //alert(data);
+                var json = JSON.parse(data);
+                resolve(json);
+                
+            })
+            .send();
+        });
+    } else {
+        data = await self.refresh_list;
+    }
+    console.log("LIST1",data);
+    if(data?.result) {
+        schema.$.list.elementsClear();
+        for(var x = 0; x < data.data.length;x++) {
+            addAsset(data.data[x]);
+        }
+    }    
+}
+refresh_list();
 
 btnClearStage.el.addEventListener("click",()=>{
     self.app.tracks.splice(0,self.app.tracks.length);
@@ -609,7 +650,7 @@ function toggleRecording() {
 function handleDataAvailable(event) {
     
     if (event.data && event.data.size > 0) {
-        console.log(event.data);
+        console.log("DATA",event.data);
         recordedBlobs.push(event.data);
     } else {
         //console.log( mediaRecorder.requestData() );
@@ -777,7 +818,7 @@ function startRecording() {
         console.log(error.name);
         console.log(error);
     }
-    mediaRecorder.start();
+    mediaRecorder.start(10000);
     try {
         
     } catch(e) {
@@ -865,7 +906,7 @@ btnSend.el.addEventListener("click",async ()=>{
     Import({url:"/send",method:"POST",type:Import.Binary,data : nblob })
     .done((data)=>{
         console.log(data);
-        refresh_list();
+        refresh_list(true);
     })
     .send();
 });
@@ -915,7 +956,9 @@ async function addAsset(item) {
         if(!visible) {
             if(!itemStruct.init) {
                 itemStruct.init = true;
-                var data = await fetch(`/messages/user1/${item.file}.ncp`);
+                var url = `/messages/user1/${item.file}.ncp`;
+
+                var data = await fetch(url);
                 var blob = await data.blob();
                 var schema2 = await schema1.$.holder.elementPushPacketAsync(`
                     <tr id="view">
@@ -990,20 +1033,7 @@ async function addAsset(item) {
         load.apply({props:{data:blob}}); // to reuse this.zip same as ncp.super
     });
 }
-function refresh_list() {
-    Import({url:"/list",method:"GET"})
-    .done((data)=>{
-        //alert(data);
-        var json = JSON.parse(data);
-        if(json.result) {
-            schema.$.list.elementsClear();
-            for(var x = 0; x < json.data.length;x++) {
-                addAsset(json.data[x]);
-            }
-        }
-    })
-    .send();
-}
-refresh_list();
+
+
 
 </script>

@@ -6,7 +6,16 @@ const request = require('request');
 const mysql = require('mysql2');
 const app = express();
 app.use("/",express.static('./public'));
+var update = false;
+var has_cache = false;
+var cache = null;
 app.get("/list",async (req,res)=>{
+    if(!update && has_cache) {
+        console.log("cache");
+        res.send(cache);
+        return;
+    }
+    has_cache = false;
     var connection = null;
     try {
         connection = mysql.createConnection(config.connection);
@@ -20,7 +29,9 @@ app.get("/list",async (req,res)=>{
             });
             
         });
-        res.json({result:true,data:data});
+        has_cache = true;
+        cache = JSON.stringify({result:true,data:data});
+        res.send(cache);
     } catch(e) {
         if(connection) connection.close();
         console.log(e);
@@ -160,6 +171,7 @@ app.post("/send",(req,res)=>{
                 fs.writeFileSync("./public/messages/user1/"+id+".ncp",buffer,"binary");
                 // ncp stands for number cooler product
                 res.json({result:true});
+                update = true;
                 return;
             } catch(e) {
                 if(connection) connection.close();
@@ -168,6 +180,7 @@ app.post("/send",(req,res)=>{
                 return;
             }
         }
+        
         res.json({result:false});
     });
 });
