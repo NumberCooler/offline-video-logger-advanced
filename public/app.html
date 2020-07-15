@@ -842,14 +842,22 @@ async function makeNcpBlob(blobs) {
         blob = new Blob(recordedBlobs, {type: 'video/webm'});
         type = "video.webm";
     }
-    var zip = new JSZip();
-    zip.file("data.webm", blob);
-    zip.file("spec.json", JSON.stringify({
-        version : [0,0,1],
+
+    var config_str = JSON.stringify({
+        version : [0,0,2],
         type : type,
-        main : "data.webm"
-    }));
-    return await zip.generateAsync({type:"blob"});
+        main : "webm"
+    });
+    var config_ab = Binary.str2utf8ab(config_str);
+    var webm_ab = await blob.arrayBuffer()
+    var ncp_blob = new Blob( 
+        new BinaryWriter().u32(config_ab.byteLength).data.concat([config_ab]) 
+            .concat(
+                new BinaryWriter().u32(webm_ab.byteLength).data.concat([webm_ab])
+            ),
+        {mime:"application/ncp"}
+    );
+    return ncp_blob;
 }
 
 btnSend.el.addEventListener("click",async ()=>{
@@ -944,13 +952,21 @@ async function addAsset(item) {
         var data = await fetch(`/messages/user1/${item.file}.ncp`);
         var blob = await data.blob();
         async function load() {
-            this.zip = await JSZip.loadAsync(this.props.data);
-            var result = await this.zip.file("spec.json").async("string");
-            this.spec = JSON.parse(result);
+
+            var file_ab = await this.props.data.arrayBuffer();
+            var br = new BinaryReader(this.props.data,file_ab);
+            var sz = br.u32();
+            var config_blob = br.toBlob(sz);
+            var config_ab = await config_blob.arrayBuffer();
+            var json_str = Binary.utf8ab2str(config_ab,config_ab.byteLength);
+            this.spec = JSON.parse(json_str);
+
             // bound to 0.0.1
             if( this.spec.type == "audio.webm" ) {
+                var sz2 = br.u32();
+                var webm_blob = br.toBlob(sz2);
                 // change by this point compared to control
-                var arrayBuffer = await this.zip.file("data.webm").async("arraybuffer"); 
+                var arrayBuffer = await webm_blob.arrayBuffer();
                 var audio = new AudioContext();
                 var bufferSource = await audio.decodeAudioData(arrayBuffer);
                 var track = {

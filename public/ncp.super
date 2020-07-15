@@ -13,15 +13,21 @@
     } else {
         this.error = new Error("must have data attribute.");
     }
-    this.zip = await JSZip.loadAsync(this.props.data);
-    var result = await this.zip.file("spec.json").async("string");
-    this.spec = JSON.parse(result);
+
+    var file_ab = await this.props.data.arrayBuffer();
+    var br = new BinaryReader(this.props.data,file_ab);
+    var sz = br.u32();
+    var config_blob = br.toBlob(sz);
+    var config_ab = await config_blob.arrayBuffer();
+    var json_str = Binary.utf8ab2str(config_ab,config_ab.byteLength);
+    console.log(json_str);
+    this.spec = JSON.parse(json_str);
+    this.br = br;
     this.ui = [];
     var version = this.spec.version;
     if(version[0] == 0) {
         if(version[1] == 0) {
-            if(version[2] == 1) {
-
+            if(version[2] == 2) {
                 if( this.spec.type == "audio.webm" ) {
                     this.ui.push(`<audio id="control" controls></audio>`)
                 } else if(this.spec.type == "video.webm") {
@@ -53,12 +59,14 @@
     var version = this.spec.version;
     if(version[0] == 0) {
         if(version[1] == 0) {
-            if(version[2] == 1) {
+            if(version[2] == 2) {
                 if( this.spec.type == "audio.webm" ) {
-                    var content_blob = await this.zip.file("data.webm").async("blob");
+                    var sz2 = this.br.u32();
+                    var content_blob = this.br.toBlob(sz2);
                     control.el.src = window.URL.createObjectURL(content_blob);
                 } else if(this.spec.type == "video.webm") {
-                    var content_blob = await this.zip.file("data.webm").async("blob");
+                    var sz2 = this.br.u32();
+                    var content_blob = this.br.toBlob(sz2);
                     control.el.src = window.URL.createObjectURL(content_blob);
                     var schema1 = await debug.$.elementPushPacketAsync(`
                         <Component id="prompt"></Component>
