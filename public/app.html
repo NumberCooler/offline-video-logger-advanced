@@ -75,17 +75,19 @@
                     </div>
                     <div>
                         screen
-                        <button id="btnSetScreen">set</button>
+                        <button id="btnAddScreen">add</button>
                     </div>
                     <div>
                         camera
                         <select id="video_devices"></select>
-                        <button id="btnSetCamera">set</button>
+                        <button id="btnAddCamera">add</button>
                     </div>
                     <div>
-                        canvas
-                        <button id="btnSetCanvas">set</button>
+                        image file
+                        <input id="fileImage" type="file" multiple="true"/>
+                        <button id="btnAddImageFile">add</button>
                     </div>
+
                 </div>
             </div>
             <div style="height:40px;"></div>
@@ -173,7 +175,7 @@ this.app = {
     tracks : [],
     recordType : "none",
     video : {
-        mode : "none"
+        mode : "none",
     },
     audio : {
         mode : "none"
@@ -424,8 +426,8 @@ btnAddAudioFile.el.addEventListener("click",async ()=>{
         var reader = new FileReader();
         reader.onload = async function(e) {
             var arrayBuffer = this.result;
-            var type = file.type.indexOf("audio") !=-1 ? "audio" : ( file.type.indexOf("video") != -1 ? "video" : null );
-            if(type == null) { console.log("unkown file type : " + file.name); return; }
+            var type = file.type.indexOf("audio/") !=-1 ? "audio" : null;
+            if(type == null) { console.log("not an audio file : " + file.name); return; }
             var audio = new AudioContext();
             var bufferSource = await audio.decodeAudioData(arrayBuffer);
             var track = {
@@ -449,11 +451,44 @@ btnAddAudioFile.el.addEventListener("click",async ()=>{
         addTrack(fileAudio.el.files[x]);
     }
 });
+btnAddImageFile.el.addEventListener("click",async ()=>{
+    function addTrack(file) {
+        var reader = new FileReader();
+        reader.onload = async function(e) {
+            var arrayBuffer = this.result;
+            var type = file.type.indexOf("image/") !=-1 ? "image" : null;
+            if(type == null) { console.log("not an image file : " + file.name); return; }
 
+            var img = new Image();
+            var blob =  new Blob([arrayBuffer]);
+            img.src = window.URL.createObjectURL(blob);
+            var track = {
+                type : "video",
+                data : {
+                    mime : file.type,
+                    name : file.name,
+                    type : "image",
+                    blob,
+                    el : img
+                },
+                events : []
+            };
+            fileImage.el.value = "";
+            self.app.tracks.push(track);
+            console.log(track);
+            self.app.events.emit("updateTracks");
+        }
+        reader.readAsArrayBuffer(file);
+    }
+    for(var x = 0; x < fileImage.el.files.length;x++) {
+        addTrack(fileImage.el.files[x]);
+    }
+
+});
 
 
 cameraDevice = null;
-
+/*
 btnSetCamera.el.addEventListener("click",async ()=>{
 
     chkScreen.el.style.display = "none";
@@ -486,39 +521,42 @@ btnSetCamera.el.addEventListener("click",async ()=>{
     schema.el.control.play();
     cameraDevice = schema.el.control;
 });
+*/
+var cameraNb = 0;
+btnAddCamera.el.addEventListener("click",async ()=>{
 
-btnSetCanvas.el.addEventListener("click",()=>{
-
-    // CANVAS WILL NOT RECORD FIRST FRAME IF YOU DOWN CHANGE THE CONTENT OF CANVAS AT LEAST ONE TIME
-
-    chkScreen.el.style.display = "none";
-    chkCanvas.el.style.display = "";
-    chkCamera.el.style.display = "none";
-
-
-    if(cameraDevice) { // stop camera and screen
-        console.log("CLEAR camera");
-        cameraDevice.pause();
-        stream.getTracks().forEach(function(track) {
-          track.stop();
-        });
-        cameraDevice.style.display = "none";
-        camera_holder.$.elementsClear();
+    const constraints = {
+        video: {
+            deviceId: { exact : video_devices.el.value }
+        }
+    };
+    var videoel = document.createElement("video");
+    var stream = null;
+    try {
+        stream = videoel.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (error) {
+        stream = videoel.src = window.URL.createObjectURL(await navigator.mediaDevices.getUserMedia(constraints));
     }
-
-    if(self.app.video.mode == "play") {
-        recordHolder.el.style.display = "";
-        playscreen.el.style.display = "none";
-    }
-    self.app.video.mode = "canvas";
-    canvas_screen.el.style.display = "";
-    self.app.stream = stream = canvas_screen.el.captureStream(32);
-
-
-    console.log(stream);
-
+    document.body.appendChild(videoel);
+    videoel.style.display = "none";
+    videoel.play();
+    var track = {
+        type : "video",
+        data : {
+            name : "camera" + cameraNb,
+            type : "camera",
+            stream : stream,
+            el : videoel
+        },
+        events : []
+    };
+    cameraNb++;
+    self.app.tracks.push(track);
+    console.log(track);
+    self.app.events.emit("updateTracks");
 });
 
+/*
 btnSetScreen.el.addEventListener("click",async ()=>{
     chkScreen.el.style.display = "";
     chkCanvas.el.style.display = "none";
@@ -554,6 +592,7 @@ btnSetScreen.el.addEventListener("click",async ()=>{
     
     //throw new Error("(audio only) not implemented by navigator, try mixing an recorded audio.");
     var stream2 = null;
+    var videoel = document.createElement("video");
     if (navigator.getDisplayMedia) {
         stream2 = await navigator.getDisplayMedia(constraints2);
     } else if (navigator.mediaDevices.getDisplayMedia) {
@@ -561,6 +600,7 @@ btnSetScreen.el.addEventListener("click",async ()=>{
     } else {
         stream2 = await navigator.mediaDevices.getUserMedia({video: {mediaSource: 'screen'}});
     }
+    videoel.play();
 
     var schema = await camera_holder.$.elementSetPacketAsync(`
         <video id="control"></video>
@@ -584,6 +624,38 @@ btnSetScreen.el.addEventListener("click",async ()=>{
     schema.el.control.play();
     cameraDevice = schema.el.control;
 });
+*/
+var screenNb = 0;
+btnAddScreen.el.addEventListener("click",async ()=>{
+    const constraints = { video : true };
+    var videoel = document.createElement("video");
+    var stream = null;
+    if (navigator.getDisplayMedia) {
+        stream = videoel.srcObject = await navigator.getDisplayMedia(constraints);
+    } else if (navigator.mediaDevices.getDisplayMedia) {
+        stream = videoel.srcObject = await navigator.mediaDevices.getDisplayMedia(constraints);
+    } else {
+        stream = videoel.srcObject = await navigator.mediaDevices.getUserMedia({video: {mediaSource: 'screen'}});
+    }
+    videoel.play();
+
+    var track = {
+        type : "video",
+        data : {
+            name : "screen"+screenNb,
+            type : "screen",
+            stream : stream,
+            el : videoel
+        },
+        events : []
+    };
+    screenNb++;
+    self.app.tracks.push(track);
+    console.log(track);
+    self.app.events.emit("updateTracks");
+
+});
+
 btnSetVideoNone.el.addEventListener("click",()=>{
 
     chkScreen.el.style.display = "none";
@@ -818,7 +890,7 @@ function startRecording() {
         console.log(error.name);
         console.log(error);
     }
-    mediaRecorder.start(10000);
+    mediaRecorder.start(1000);
     try {
         
     } catch(e) {
@@ -912,8 +984,9 @@ btnSend.el.addEventListener("click",async ()=>{
 });
 
 
-self.app.events.on("updateTracks",()=>{
+self.app.events.on("updateTracks",async ()=>{
     // do not remove duplicate tracks cause it may be same track name for different folders
+    console.log("update tracks");
     tracksView.$.elementsClear();
     async function addTrack(n,track) {
         if(track.type == "audio") {
@@ -927,15 +1000,95 @@ self.app.events.on("updateTracks",()=>{
             schema.el.btnHit.addEventListener("click",()=>{
                 self.app.events.emit("hitTrack",[n]);
             });
+        } else if(track.type == "video") {
+            var schema = await tracksView.$.elementPushPacketAsync(`
+                <div style="display:flex;">
+                    <div style="padding-left:5px;padding-right:5px;">🔊 ${(""+n).padStart(2,"0")}</div>
+                    <div style="padding-left:5px;padding-right:5px;width:100px;overflow:hidden;white-space: nowrap;">${track.data.name}</div>
+                    <div style="padding-left:5px;padding-right:5px;"><button id="btnHit">MS</button></div>
+                </div>
+            `);
+            schema.el.btnHit.addEventListener("click",()=>{
+                self.app.events.emit("msTrack",[n]);
+            });
+        } else if(track.type == "image") {
+            var schema = await tracksView.$.elementPushPacketAsync(`
+                <div style="display:flex;">
+                    <div style="padding-left:5px;padding-right:5px;">🔊 ${(""+n).padStart(2,"0")}</div>
+                    <div style="padding-left:5px;padding-right:5px;width:100px;overflow:hidden;white-space: nowrap;">${track.data.name}</div>
+                    <div style="padding-left:5px;padding-right:5px;"><button id="btnHit">MS</button></div>
+                </div>
+            `);
+            schema.el.btnHit.addEventListener("click",()=>{
+                self.app.events.emit("msTrack",[n]);
+            });
         }
     }
+
     if(self.app.tracks.length>0) lblTracks.el.style.display = "";
     else lblTracks.el.style.display = "none";
     for(var x =0; x < self.app.tracks.length;x++) {
         addTrack(x,self.app.tracks[x]);
     }
-});
+    if(self.app.hasVideoTracks()) {
+        recordHolder.el.style.display = "";
+        var schema = await camera_holder.$.elementSetPacketAsync(`
+            <canvas id="videoOutput" style="border:solid 1px #000;background-color:#000;"></canvas>
+        `);
+        schema.el.videoOutput.setAttribute("width",1920);
+        schema.el.videoOutput.setAttribute("height",1080);
+        schema.el.videoOutput.style.width = "100%";
 
+        // unique template
+        var ctx = schema.el.videoOutput.getContext("2d");
+        self.app.video.canvasFlag = true;
+        var lastTrack = -1;
+        self.app.video.canvas = function() {
+            if(!self.app.video.canvasFlag) return;
+            if("msTrack" in self.app.video) {
+                var track = self.app.tracks[self.app.video.msTrack];
+                if(lastTrack!=self.app.video.msTrack) {
+                    if(track.data.type == "clip") {
+                        // loop
+                        console.log("clip");
+                        track.data.el.currentTime= 0;
+                        track.data.el.play();     
+                        var f = ()=>{
+                            lastTrack = -1;
+                            track.data.el.removeEventListener("ended",self.app.video.clip.handler);
+                        };
+                        self.app.video.clip = {
+                            handler : f
+                        };
+                        track.data.el.addEventListener("ended",f);
+                    } else if(track.data.type == "image") {
+                        ctx.drawImage(track.data.el, 0, 0, track.data.el.width, track.data.el.height, 0, 0, 1920, 1080);
+                    }
+                    lastTrack = self.app.video.msTrack;
+                }
+                if(track.type == "video") { // camera, screen, video asset
+                    if(track.data.type == "image") {
+                        //ctx.drawImage(track.data.el, 0, 0, track.data.el.width, track.data.el.height, 0, 0, 1920, 1080);
+                    } else {
+                        ctx.drawImage(track.data.el, 0, 0, track.data.el.videoWidth, track.data.el.videoHeight, 0, 0, 1920, 1080);
+                    }
+                }
+            }
+            setTimeout(()=>{
+                self.app.video.canvas();
+            },0);
+        };
+        self.app.video.canvas();
+        self.app.stream = stream = schema.el.videoOutput.captureStream(32);
+        self.app.video.mode = "play";
+
+    } else {
+        self.app.video.canvasFlag = false;
+    }
+});
+self.app.events.on("msTrack",(n)=>{
+    self.app.video.msTrack = n;
+});
 
 async function addAsset(item) {
     var visible = false;
@@ -990,6 +1143,7 @@ async function addAsset(item) {
             visible = false;
         }
     });
+    var clipNb = 0;
     schema1.el.addAsTrack.addEventListener("click",async ()=>{
         console.log("addAsTrack");
         var data = await fetch(`/messages/user1/${item.file}.ncp`);
@@ -1026,7 +1180,29 @@ async function addAsset(item) {
                 self.app.events.emit("updateTracks");
                 console.log(track);
             } else if(this.spec.type == "video.webm") {
-                throw new Error("video not implemented");
+
+                var sz2 = br.u32();
+                var webm_blob = br.toBlob(sz2);
+
+                var videoel = document.createElement("video");
+                var url = URL.createObjectURL(webm_blob);
+                videoel.src = url;
+                videoel.play();
+                var stream = videoel.captureStream();//videoel.srcObject = await webm_blob.stream();
+                var track = {
+                    type : "video",
+                    data : {
+                        name : "clip" + clipNb,
+                        type : "clip",
+                        stream : stream,
+                        el : videoel
+                    },
+                    events : []
+                }
+                clipNb++;
+                self.app.tracks.push(track);
+                self.app.events.emit("updateTracks");
+                console.log(track);
             }
             // end bound
         }
