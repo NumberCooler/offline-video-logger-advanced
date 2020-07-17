@@ -91,7 +91,7 @@ app.post("/send",(req,res)=>{
     var body = [];
     var total = 0;
     var error = false;
-    console.log(req.query);
+    console.log("/SEND",req.query);
 	req.on("data",(chunk)=>{
         body.push(chunk);
         total += chunk.length;
@@ -128,6 +128,7 @@ app.post("/send",(req,res)=>{
                 while(fs.existsSync("./public/messages/user1/"+id+".ncp")) {
                     id = genId("msg");
                 }
+                console.log("STORING DATA");
                 connection = mysql.createConnection(config.connection);
                 var maxid = await new Promise((resolve,reject)=>{
                     connection.query(
@@ -170,6 +171,7 @@ app.post("/send",(req,res)=>{
                 });
                 fs.writeFileSync("./public/messages/user1/"+id+".ncp",buffer,"binary");
                 // ncp stands for number cooler product
+                console.log("DATA STORED");
                 res.json({result:true});
                 update = true;
                 return;

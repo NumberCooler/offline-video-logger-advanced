@@ -4285,9 +4285,9 @@ Class.define("Component", {
 			
 
 			DEBUG_COMPONENT_LEVEL += 1;
-			console.log("LEVEL:",DEBUG_COMPONENT_LEVEL);
+			//console.log("LEVEL:",DEBUG_COMPONENT_LEVEL);
 			//pattern = pattern.split("\r").join("").split("\n").join("").split("\t").join(" ");
-			console.log(pattern);
+			//console.log(pattern);
 			options = options || {
 				runMacro : true
 			};

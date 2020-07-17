@@ -69,6 +69,43 @@
             <div>
                 <div>📺 Video</div>
                 <div style="padding-left:20px;">
+                    <div>Resolution</div>
+                    <div style="padding-left:20px;">
+                        <div style="display:flex;">
+                            <div style="width:150px;border-right:solid 1px #000;padding-right:10px;">
+                                <div style="display:flex;">
+                                    <div style="flex:1;">width</div><div><input id="screenWidth" type="text" value="1920" style="width:50px;"/></div>
+                                </div>
+                                <div style="display:flex;">
+                                    <div style="flex:1;">height</div><div><input id="screenHeight" type="text" value="1080" style="width:50px;"/></div>
+                                </div>
+                            </div>
+                            <div style="font-weight:bold;font-size:10px;padding-left:10px;">
+                                <div>(4:3)</div>
+                                <div style="display:flex;padding-left:10px;">
+                                    <div id="btnResQVGA" style="margin-right:10px;">QVGA</div>
+                                    <div id="btnResVGA" style="margin-right:10px;">VGA</div>
+                                    <div id="btnResSVGA" style="margin-right:10px;">SVGA</div>
+                                    <div id="btnResXGA" style="margin-right:10px;">XGA</div>
+                                </div>
+                                <div>(16:9)</div>
+                                <div style="display:flex;padding-left:10px;">
+                                    <div id="btnResFWVGA" style="margin-right:10px;">FWVGA</div>
+                                    <div id="btnResHD720" style="margin-right:10px;">HD 720</div>
+                                    <div id="btnResHD1080" style="margin-right:10px;">HD 1080</div>
+                                </div>
+                                <div>(custom)</div>
+                                <div style="display:flex;padding-left:10px;">
+                                    <div id="btnResTwitter1" style="margin-right:10px;">Twitter Post</div>
+                                    <div id="btnResFacebook1" style="margin-right:10px;">Facebook Post</div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                
+                </div>
+                <div style="padding-left:20px;">
                     <div>
                         none
                         <button id="btnSetVideoNone">set</button>
@@ -127,6 +164,7 @@
         </div>
         <div id="mockHolder"></div>
         <div id="recordHolder">
+            
             <Component id="mic_holder"></Component>
             <Component id="mic_holder2"></Component>
             <Component id="camera_holder"></Component>
@@ -157,6 +195,46 @@ if(this.fail) {
     message.$.elementSetPacketAsync(`Hello World!`);
 }
 
+
+
+btnResQVGA.el.addEventListener("click",()=>{
+    screenWidth.el.value = "320";
+    screenHeight.el.value = "240";
+});
+btnResVGA.el.addEventListener("click",()=>{
+    screenWidth.el.value = "640";
+    screenHeight.el.value = "480";
+});
+btnResSVGA.el.addEventListener("click",()=>{
+    screenWidth.el.value = "800";
+    screenHeight.el.value = "600";
+});
+btnResXGA.el.addEventListener("click",()=>{
+    screenWidth.el.value = "1024";
+    screenHeight.el.value = "768";
+});
+btnResFWVGA.el.addEventListener("click",()=>{
+    screenWidth.el.value = "854";
+    screenHeight.el.value = "480";
+});
+btnResHD720.el.addEventListener("click",()=>{
+    screenWidth.el.value = "1280";
+    screenHeight.el.value = "720";
+});
+btnResHD1080.el.addEventListener("click",()=>{
+    screenWidth.el.value = "1920";
+    screenHeight.el.value = "1080";
+});
+btnResTwitter1.el.addEventListener("click",()=>{
+    screenWidth.el.value = "440";
+    screenHeight.el.value = "220";
+});
+btnResFacebook1.el.addEventListener("click",()=>{
+    screenWidth.el.value = "500";
+    screenHeight.el.value = "282";
+});
+
+
 listPanel.el.style.height = (window.innerHeight-90) + "px";
 mainPanel.el.style.height = (window.innerHeight-130) + "px";
 
@@ -174,6 +252,7 @@ this.app = {
     stream : null,
     tracks : [],
     recordType : "none",
+    recordState : "stopped",
     video : {
         mode : "none",
     },
@@ -503,22 +582,6 @@ btnSetCamera.el.addEventListener("click",async ()=>{
 
     canvas_screen.el.style.display = "none";
     
-    const constraints = {
-        video: {
-            deviceId: { exact : video_devices.el.value }
-        }
-    };
-    var schema = await camera_holder.$.elementSetPacketAsync(`
-        <video id="control"></video>
-    `)
-    schema.el.control.style.width = "100%";
-    
-    try {
-      stream = schema.el.control.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
-    } catch (error) {
-      stream = schema.el.control.src = window.URL.createObjectURL(await navigator.mediaDevices.getUserMedia(constraints));
-    }
-    schema.el.control.play();
     cameraDevice = schema.el.control;
 });
 */
@@ -579,39 +642,6 @@ btnSetScreen.el.addEventListener("click",async ()=>{
         playscreen.el.style.display = "none";
     }
     self.app.video.mode = "desktop";
-
-    
-    const constraints = {
-        video: {
-            mediaSource: 'screen'
-        }
-    };
-    const constraints2 = {
-        video : true
-    };
-    
-    //throw new Error("(audio only) not implemented by navigator, try mixing an recorded audio.");
-    var stream2 = null;
-    var videoel = document.createElement("video");
-    if (navigator.getDisplayMedia) {
-        stream2 = await navigator.getDisplayMedia(constraints2);
-    } else if (navigator.mediaDevices.getDisplayMedia) {
-        stream2 = await navigator.mediaDevices.getDisplayMedia(constraints2);
-    } else {
-        stream2 = await navigator.mediaDevices.getUserMedia({video: {mediaSource: 'screen'}});
-    }
-    videoel.play();
-
-    var schema = await camera_holder.$.elementSetPacketAsync(`
-        <video id="control"></video>
-    `)
-    schema.el.control.style.width = "100%";
-    
-    try {
-      stream = schema.el.control.srcObject = stream2;
-    } catch (error) {
-      stream = schema.el.control.src = window.URL.createObjectURL(stream2);
-    }
 
     stream.getTracks().forEach((track)=>{
         track.onended = function(event) {
@@ -685,7 +715,7 @@ btnSetVideoNone.el.addEventListener("click",()=>{
 btnSetAudioNone.el.addEventListener("click",()=>{
     chkMic.el.style.display = "none";
     self.app.audio.mode = "none";
-    audioStream0.getTracks().forEach((track)=>{
+    if(audioStream0) audioStream0.getTracks().forEach((track)=>{
         track.stop();
     })
 });
@@ -741,7 +771,6 @@ async function handleStop(event) {
         console.log("removing tracks");
         stream.removeTrack(self.app.audio.recordTracks[x]);
     }
-
     if(self.app.video.mode == "none") {
         const superBuffer = new Blob(recordedBlobs, {type: 'audio/webm'});
         var url = (window.URL || window.webkitURL).createObjectURL(superBuffer);
@@ -752,14 +781,15 @@ async function handleStop(event) {
             </audio>
         `);
         self.app.audio.control = schema.el.audio;
-        self.app.events.off("hitTrack",self.app.events.hitTrack);
+        
         delete self.app.events.hitTrack;
     } else {
         const superBuffer = new Blob(recordedBlobs, {type: 'video/webm'});
         playscreen.el.src = window.URL.createObjectURL(superBuffer);
-        self.app.events.off("hitTrack",self.app.events.hitTrack);
+        
     }
     
+    self.app.recordState = "stopped";
 }
 
 
@@ -776,8 +806,9 @@ function startRecording() {
     console.log("audio mode",self.app.audio.mode)
     recordHolder.el.style.display = "";
     recordedBlobs = [];
+    if(self.app.events.hitTrack)
+        self.app.events.off("hitTrack",self.app.events.hitTrack);
 
-    
     var audioCtx = new AudioContext();
     self.app.audio.ctx = audioCtx;
     self.app.audio.recordTracks = [];
@@ -791,6 +822,8 @@ function startRecording() {
         microphoneGain.gain.value = 0.5;
         microphoneGain.connect(audioMixer);
         microphone.connect(audioCtx.destination);
+
+        // stop audio Mixer on audio none, or audio track clear.
     }
 
     if(self.app.hasAudioTracks()) {
@@ -828,6 +861,7 @@ function startRecording() {
                 console.log(audioTrack);
                 stream.addTrack(audioTrack);
             });
+        
     }
     
     if(self.app.video.mode != "none") {
@@ -890,9 +924,10 @@ function startRecording() {
         console.log(error.name);
         console.log(error);
     }
-    mediaRecorder.start(1000);
+    self.app.recordState = "recording";
+    mediaRecorder.start(1000/30);
     try {
-        
+
     } catch(e) {
         log("error on media recorder start");
         log(e.message);
@@ -978,6 +1013,11 @@ btnSend.el.addEventListener("click",async ()=>{
     Import({url:"/send",method:"POST",type:Import.Binary,data : nblob })
     .done((data)=>{
         console.log(data);
+        var json = JSON.parse(data);
+        if(!json.result) {
+            alert("can't save this record, interrupted on server.");
+            return;
+        }
         refresh_list(true);
     })
     .send();
@@ -988,6 +1028,7 @@ self.app.events.on("updateTracks",async ()=>{
     // do not remove duplicate tracks cause it may be same track name for different folders
     console.log("update tracks");
     tracksView.$.elementsClear();
+    
     async function addTrack(n,track) {
         if(track.type == "audio") {
             var schema = await tracksView.$.elementPushPacketAsync(`
@@ -1006,11 +1047,16 @@ self.app.events.on("updateTracks",async ()=>{
                     <div style="padding-left:5px;padding-right:5px;">🔊 ${(""+n).padStart(2,"0")}</div>
                     <div style="padding-left:5px;padding-right:5px;width:100px;overflow:hidden;white-space: nowrap;">${track.data.name}</div>
                     <div style="padding-left:5px;padding-right:5px;"><button id="btnHit">MS</button></div>
+                    <div style="padding-left:5px;padding-right:5px;"><button id="btnPip">PIP</button></div>
                 </div>
             `);
             schema.el.btnHit.addEventListener("click",()=>{
                 self.app.events.emit("msTrack",[n]);
             });
+            schema.el.btnPip.addEventListener("click",()=>{
+                self.app.events.emit("pipTrack",[n]);
+            });
+
         } else if(track.type == "image") {
             var schema = await tracksView.$.elementPushPacketAsync(`
                 <div style="display:flex;">
@@ -1022,6 +1068,7 @@ self.app.events.on("updateTracks",async ()=>{
             schema.el.btnHit.addEventListener("click",()=>{
                 self.app.events.emit("msTrack",[n]);
             });
+
         }
     }
 
@@ -1030,39 +1077,58 @@ self.app.events.on("updateTracks",async ()=>{
     for(var x =0; x < self.app.tracks.length;x++) {
         addTrack(x,self.app.tracks[x]);
     }
+
     if(self.app.hasVideoTracks()) {
         recordHolder.el.style.display = "";
         var schema = await camera_holder.$.elementSetPacketAsync(`
+            <div id="mockWidth"></div>
             <canvas id="videoOutput" style="border:solid 1px #000;background-color:#000;"></canvas>
         `);
-        schema.el.videoOutput.setAttribute("width",1920);
-        schema.el.videoOutput.setAttribute("height",1080);
-        schema.el.videoOutput.style.width = "100%";
-
+        var videoOutputSize = [parseInt(screenWidth.el.value),parseInt(screenHeight.el.value)];
+        schema.el.videoOutput.setAttribute("width",videoOutputSize[0]);
+        schema.el.videoOutput.setAttribute("height",videoOutputSize[1]);
+        if(videoOutputSize[0] < schema.el.mockWidth.offsetWidth) {
+            schema.el.videoOutput.style.width = videoOutputSize[0] + 'px';
+        } else {
+            schema.el.videoOutput.style.width = "100%";
+        }
+        //schema.el.videoOutput.style.display = "none";
         // unique template
         var ctx = schema.el.videoOutput.getContext("2d");
         self.app.video.canvasFlag = true;
         var lastTrack = -1;
-        self.app.video.canvas = function() {
+        var lastPipTrack = -1;
+        var backstream = {
+            id : null,
+            stream : null
+        };
+
+        self.app.video.output = async function() {
             if(!self.app.video.canvasFlag) return;
             if("msTrack" in self.app.video) {
                 var track = self.app.tracks[self.app.video.msTrack];
                 if(lastTrack!=self.app.video.msTrack) {
-                    if(track.data.type == "clip") {
-                        // loop
-                        console.log("clip");
-                        track.data.el.currentTime= 0;
-                        track.data.el.play();     
-                        var f = ()=>{
-                            lastTrack = -1;
-                            track.data.el.removeEventListener("ended",self.app.video.clip.handler);
-                        };
-                        self.app.video.clip = {
-                            handler : f
-                        };
-                        track.data.el.addEventListener("ended",f);
-                    } else if(track.data.type == "image") {
-                        ctx.drawImage(track.data.el, 0, 0, track.data.el.width, track.data.el.height, 0, 0, 1920, 1080);
+                    if(track.type == "video") {
+                        if(track.data.type == "clip") {
+                            // loop
+                            console.log("clip");
+                            track.data.el.currentTime= 0;
+                            track.data.el.play();     
+                            var f = ()=>{
+                                lastTrack = -1;
+                                track.data.el.removeEventListener("ended",self.app.video.clip.handler);
+                            };
+                            self.app.video.clip = {
+                                handler : f
+                            };
+                            track.data.el.addEventListener("ended",f);
+                        } else if(track.data.type == "image") {
+                            // maybe switching stream to the original may do it faster than printing every frame.
+                            ctx.drawImage(track.data.el, 0, 0, track.data.el.width, track.data.el.height, 0, 0, videoOutputSize[0], videoOutputSize[1]);
+                            
+                         } else if(track.data.type == "screen") {
+                         } else if(track.data.type == "camera") {
+                         }
                     }
                     lastTrack = self.app.video.msTrack;
                 }
@@ -1070,16 +1136,54 @@ self.app.events.on("updateTracks",async ()=>{
                     if(track.data.type == "image") {
                         //ctx.drawImage(track.data.el, 0, 0, track.data.el.width, track.data.el.height, 0, 0, 1920, 1080);
                     } else {
-                        ctx.drawImage(track.data.el, 0, 0, track.data.el.videoWidth, track.data.el.videoHeight, 0, 0, 1920, 1080);
+                        ctx.drawImage(track.data.el, 0, 0, track.data.el.videoWidth, track.data.el.videoHeight, 0, 0, videoOutputSize[0], videoOutputSize[1]);
                     }
                 }
             }
+            if("pipTrack" in self.app.video && self.app.video.pipTrack!=-1) {
+                var nsz = [videoOutputSize[0]/4, videoOutputSize[1]/4];
+                var track = self.app.tracks[self.app.video.pipTrack];
+                if(lastTrack!=self.app.video.msTrack) {
+                    if(track.type == "video") {
+                        if(track.data.type == "clip") {
+                            console.log("clip");
+                            track.data.el.currentTime= 0;
+                            track.data.el.play();     
+                            var f = ()=>{
+                                lastTrack = -1;
+                                track.data.el.removeEventListener("ended",self.app.video.clip.handler);
+                            };
+                            self.app.video.clip = {
+                                handler : f
+                            };
+                            track.data.el.addEventListener("ended",f);
+                        } else if(track.data.type == "image") {
+                            ctx.drawImage(track.data.el, 0, 0, track.data.el.width, track.data.el.height, 3*nsz[0] - 0.1*nsz[0], 3*nsz[1] - 0.1*nsz[0], nsz[0], nsz[1]);
+                        }
+                    }
+                }
+                if(track.type == "video") {
+                    if(track.data.type == "image") {
+
+                    } else {
+                        
+                        ctx.drawImage(track.data.el, 0, 0, track.data.el.videoWidth, track.data.el.videoHeight, 3*nsz[0] - 0.1*nsz[0],3*nsz[1]-0.1*nsz[0], nsz[0], nsz[1]);
+                    }
+                }
+                lastPipTrack = self.app.video.pipTrack;
+            }
             setTimeout(()=>{
-                self.app.video.canvas();
-            },0);
+                self.app.video.output();
+            },10);
         };
-        self.app.video.canvas();
-        self.app.stream = stream = schema.el.videoOutput.captureStream(32);
+        self.app.video.output();
+        self.app.stream = stream = schema.el.videoOutput.captureStream(60);
+        stream.getTracks().forEach((track)=>{
+            if( track.kind == "video" ) {
+                backstream.id = track.id;
+                backstream.stream = stream;
+            }
+        });
         self.app.video.mode = "play";
 
     } else {
@@ -1088,6 +1192,19 @@ self.app.events.on("updateTracks",async ()=>{
 });
 self.app.events.on("msTrack",(n)=>{
     self.app.video.msTrack = n;
+    if(self.app.recordState == "stopped") {
+        recordHolder.el.style.display = "";
+    }
+});
+self.app.events.on("pipTrack",(n)=>{
+    if(self.app.video.pipTrack == n) {
+        self.app.video.pipTrack = -1;
+    } else {
+        self.app.video.pipTrack = n;
+    }
+    if(self.app.recordState == "stopped") {
+        recordHolder.el.style.display = "";
+    }
 });
 
 async function addAsset(item) {
@@ -1123,7 +1240,7 @@ async function addAsset(item) {
                     </tr>
                 `,{context:{src:blob}});
                 itemStruct.schema2 = schema2;
-                schema2.el.sc.scrollIntoView({block:"center"});
+                schema2.el.sc.scrollIntoView({block:"center"});S
                 schema2.exports.ncp.control.el.play();
                 if( schema2.exports.ncp.spec.type == "audio.webm" ) {
 
