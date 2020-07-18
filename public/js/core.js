@@ -5672,14 +5672,14 @@ Class.define("UI.Body", {
 				// render
 				//UI.Body.elementRender(time);
 				// the caller are in UI.load, UI.init -> so it's self calling if initialized
-				console.log("RENDER LOOP");
-				console.log(UI);
+				//console.log("RENDER LOOP");
+				//console.log(UI);
 				if (this.debug) {
 					//console.log("debug");
 					setTimeout(UI.Body.RenderLoop, 0);
 				} else {
-					console.log(this);
-					console.log(UI.Body.RenderLoop);
+					//console.log(this);
+					//console.log(UI.Body.RenderLoop);
 					//throw "OK";
 					//requestAnimationFrame(this.RenderLoop);
 				}

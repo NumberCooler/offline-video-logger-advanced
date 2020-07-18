@@ -294,7 +294,6 @@ async function refresh_list(update) {
     } else {
         data = await self.refresh_list;
     }
-    console.log("LIST1",data);
     if(data?.result) {
         schema.$.list.elementsClear();
         for(var x = 0; x < data.data.length;x++) {
@@ -614,7 +613,17 @@ btnAddImageVideoFile.el.addEventListener("click",async ()=>{
                     console.log(track);
                     self.app.events.emit("updateTracks");
                 } else {
-                    console.log("not an image file : " + file.name); return; 
+                    var ext = "";
+                    if(file.name.length >= 4) {
+                        ext = file.name.substring(file.name.length-4);
+                    }
+                    if(ext == ".ncp") {
+                        // may check for version and signature, to handle/bind private data of author.
+                        throw new Error("not implemented external ncp files. contact an especialist.");
+                    } else {
+                        console.log("not an image/video file : " + file.name + " : " + file.type); return; 
+                    }
+                    
                 }
             }
         }
@@ -1010,6 +1019,7 @@ function stopRecording() {
     playscreen.el.controls = true;
 }
 async function download() {
+
     var nblob = await makeNcpBlob(recordedBlobs);
     const url = window.URL.createObjectURL(nblob);
     const a = document.createElement('a');
@@ -1226,7 +1236,7 @@ self.app.events.on("updateTracks",async ()=>{
                 }
                 if(track.type == "video") {
                     if(track.data.type == "image") {
-
+                        ctx.drawImage(track.data.el, 0, 0, track.data.el.width, track.data.el.height, 3*nsz[0] - 0.1*nsz[0], 3*nsz[1] - 0.1*nsz[0], nsz[0], nsz[1]);    
                     } else {
                         
                         ctx.drawImage(track.data.el, 0, 0, track.data.el.videoWidth, track.data.el.videoHeight, 3*nsz[0] - 0.1*nsz[0],3*nsz[1]-0.1*nsz[0], nsz[0], nsz[1]);
