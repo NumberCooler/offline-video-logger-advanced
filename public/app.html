@@ -45,91 +45,105 @@
     </div>
     <div style="width:5px;background-color:navy;"></div>
     <div id="mainPanel" style="flex:1;padding:20px;overflow:auto;">
-        <div id="lblSettings" style="cursor:pointer;">🔧 Input Settings</div>
-        <div id="settingsPanel" style="padding-left:20px;">
-            <div>
-                <div>🔊 Audio</div>
+        
+        <div id="lblSettings" style="cursor:pointer;">🔧 Settings</div>
+        <div id="settingsPanel">
+            <div style="padding-left:20px;">Output</div>
                 <div style="padding-left:20px;">
-                    <div>
-                        none
-                        <button id="btnSetAudioNone">set</button>
-                    </div>
-                    <div>
-                        microphone
-                        <select id="mic_devices"></select>
-                        <button id="btnSetMic">set</button>
-                    </div>
-                    <div>
-                        audio file
-                        <input id="fileAudio" type="file" multiple="true"/>
-                        <button id="btnAddAudioFile">add</button>
-                    </div>
-                </div>
-            </div>
-            <div>
-                <div>📺 Video</div>
-                <div style="padding-left:20px;">
-                    <div>Resolution</div>
                     <div style="padding-left:20px;">
-                        <div style="display:flex;">
-                            <div style="width:150px;border-right:solid 1px #000;padding-right:10px;">
+                        <div>📺 Video</div>
+                        <div style="padding-left:20px;">
+                            <div>Resolution</div>
+                            <div style="padding-left:20px;">
                                 <div style="display:flex;">
-                                    <div style="flex:1;">width</div><div><input id="screenWidth" type="text" value="1920" style="width:50px;"/></div>
-                                </div>
-                                <div style="display:flex;">
-                                    <div style="flex:1;">height</div><div><input id="screenHeight" type="text" value="1080" style="width:50px;"/></div>
+                                    <div style="width:150px;border-right:solid 1px #000;padding-right:10px;">
+                                        <div style="display:flex;">
+                                            <div style="flex:1;">width</div><div><input id="screenWidth" type="text" value="1920" style="width:50px;"/></div>
+                                        </div>
+                                        <div style="display:flex;">
+                                            <div style="flex:1;">height</div><div><input id="screenHeight" type="text" value="1080" style="width:50px;"/></div>
+                                        </div>
+                                    </div>
+                                    <div style="font-weight:bold;font-size:10px;padding-left:10px;">
+                                        <div>(4:3)</div>
+                                        <div style="display:flex;padding-left:10px;">
+                                            <div id="btnResQVGA" style="margin-right:10px;">QVGA</div>
+                                            <div id="btnResVGA" style="margin-right:10px;">VGA</div>
+                                            <div id="btnResSVGA" style="margin-right:10px;">SVGA</div>
+                                            <div id="btnResXGA" style="margin-right:10px;">XGA</div>
+                                        </div>
+                                        <div>(16:9)</div>
+                                        <div style="display:flex;padding-left:10px;">
+                                            <div id="btnResFWVGA" style="margin-right:10px;">FWVGA</div>
+                                            <div id="btnResHD720" style="margin-right:10px;">HD 720</div>
+                                            <div id="btnResHD1080" style="margin-right:10px;">HD 1080</div>
+                                        </div>
+                                        <div>(custom)</div>
+                                        <div style="display:flex;padding-left:10px;">
+                                            <div id="btnResTwitter1" style="margin-right:10px;">Twitter Post</div>
+                                            <div id="btnResFacebook1" style="margin-right:10px;">Facebook Post</div>
+                                        </div>
+
+                                    </div>
                                 </div>
                             </div>
-                            <div style="font-weight:bold;font-size:10px;padding-left:10px;">
-                                <div>(4:3)</div>
-                                <div style="display:flex;padding-left:10px;">
-                                    <div id="btnResQVGA" style="margin-right:10px;">QVGA</div>
-                                    <div id="btnResVGA" style="margin-right:10px;">VGA</div>
-                                    <div id="btnResSVGA" style="margin-right:10px;">SVGA</div>
-                                    <div id="btnResXGA" style="margin-right:10px;">XGA</div>
-                                </div>
-                                <div>(16:9)</div>
-                                <div style="display:flex;padding-left:10px;">
-                                    <div id="btnResFWVGA" style="margin-right:10px;">FWVGA</div>
-                                    <div id="btnResHD720" style="margin-right:10px;">HD 720</div>
-                                    <div id="btnResHD1080" style="margin-right:10px;">HD 1080</div>
-                                </div>
-                                <div>(custom)</div>
-                                <div style="display:flex;padding-left:10px;">
-                                    <div id="btnResTwitter1" style="margin-right:10px;">Twitter Post</div>
-                                    <div id="btnResFacebook1" style="margin-right:10px;">Facebook Post</div>
-                                </div>
+                        
+                        </div>
 
+                    </div>
+
+                </div>
+            <div style="padding-left:20px;">Input</div>
+            <div style="padding-left:20px;">
+                <div style="padding-left:20px;">
+                    
+                    <div>
+                        <div>🔊 Audio</div>
+                        <div style="padding-left:20px;">
+                            <div>
+                                none
+                                <button id="btnSetAudioNone">set</button>
+                            </div>
+                            <div>
+                                microphone
+                                <select id="mic_devices"></select>
+                                <button id="btnSetMic">set</button>
+                            </div>
+                            <div>
+                                audio file
+                                <input id="fileAudio" type="file" multiple="true"/>
+                                <button id="btnAddAudioFile">add</button>
                             </div>
                         </div>
                     </div>
-                
-                </div>
-                <div style="padding-left:20px;">
                     <div>
-                        none
-                        <button id="btnSetVideoNone">set</button>
-                    </div>
-                    <div>
-                        screen
-                        <button id="btnAddScreen">add</button>
-                    </div>
-                    <div>
-                        camera
-                        <select id="video_devices"></select>
-                        <button id="btnAddCamera">add</button>
-                    </div>
-                    <div>
-                        image file
-                        <input id="fileImage" type="file" multiple="true"/>
-                        <button id="btnAddImageFile">add</button>
-                    </div>
+                        <div>📺 Video</div>
+                        <div style="padding-left:20px;">
+                            <div>
+                                none
+                                <button id="btnSetVideoNone">set</button>
+                            </div>
+                            <div>
+                                screen
+                                <button id="btnAddScreen">add</button>
+                            </div>
+                            <div>
+                                camera
+                                <select id="video_devices"></select>
+                                <button id="btnAddCamera">add</button>
+                            </div>
+                            <div>
+                                image/video file
+                                <input id="fileImage" type="file" multiple="true"/>
+                                <button id="btnAddImageVideoFile">add</button>
+                            </div>
 
+                        </div>
+                    </div>
+                    <div style="height:40px;"></div>
                 </div>
             </div>
-            <div style="height:40px;"></div>
         </div>
-        
         <div>🎬 Stage</div>
         <div style="display:flex;">
             <button id="btnRecord">start recording</button>
@@ -257,12 +271,12 @@ this.app = {
         mode : "none",
     },
     audio : {
-        mode : "none"
+        mode : "none",
+        output : "default"
     },
     hasAudioTracks : function () { for(var x = 0; x < this.tracks.length;x++) if(this.tracks[x].type == "audio") return true; return false; },
     hasVideoTracks : function () { for(var x = 0; x < this.tracks.length;x++) if(this.tracks[x].type == "video") return true; return false; }
 };
-
 
 async function refresh_list(update) {
     var data = null;
@@ -430,10 +444,12 @@ self.app.stream = null;
 
 let audioStream0 = null;
 
+
 var stream0 = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
 stream0.getTracks().forEach(function(track) {
     track.stop();
 });
+
 
 navigator.mediaDevices.enumerateDevices()
   .then(gotDevices)
@@ -446,13 +462,15 @@ async function gotDevices(deviceInfos) {
     //getStream();
     
     //camera.el.srcObject = await navigator.mediaDevices.getUserMedia({video: true});
+    var firstAudioOutput = true;
     for (let i = 0; i !== deviceInfos.length; ++i) {
         const deviceInfo = deviceInfos[i];
+        var mark = false;
         if (deviceInfo.kind === 'audioinput') {
             var schema = await mic_devices.$.elementPushPacketAsync(`
                 <option id="opt">${ deviceInfo.label || 'mic' + (mic_devices.el.length+1) }</option>
             `);
-            
+            schema.el.opt.setAttribute("value",deviceInfo.deviceId);
             log(deviceInfo.kind + ": " + deviceInfo.label +
                 " id = " + deviceInfo.deviceId);
             schema.el.opt.setAttribute("value",deviceInfo.deviceId);
@@ -466,14 +484,30 @@ async function gotDevices(deviceInfos) {
             log(deviceInfo.kind + ": " + deviceInfo.label +
                 " id = " + deviceInfo.deviceId);
             
+                schema.el.opt.setAttribute("value",deviceInfo.deviceId);
+        } else {
+            mark = true;
+        }
+
+        if(deviceInfo.kind == "audiooutput") {
+            var schema = await audio_output_devices.$.elementPushPacketAsync(`
+                <option id="opt">${ deviceInfo.label || 'audioin ' +
+                (audio_output_devices.el.length + 1) }</option>
+            `)
             schema.el.opt.setAttribute("value",deviceInfo.deviceId);
-    } else {
-        //log('Found another kind of device: '+ deviceInfo);
-        //console.log(deviceInfo);
-    }
+            if(firstAudioOutput) {
+                audio_output_devices.el.setAttribute("value",deviceInfo.deviceId);
+                firstAudioOutput = false;
+            }
+            log(deviceInfo.kind + ": " + deviceInfo.label +
+                " id = " + deviceInfo.deviceId);
+        }
+        if(mark) {
+            log("OTHER:"+deviceInfo.kind + ": " + deviceInfo.label +
+                " id = " + deviceInfo.deviceId);
+        }
   }
 }
-
 
 
 
@@ -496,8 +530,9 @@ btnSetMic.el.addEventListener("click",async ()=>{
     } catch(e) {
         audioStream0 = schema.el.control.src = window.URL.createObjectURL(await navigator.mediaDevices.getUserMedia(constraints));
     }
-    schema.el.control.play();
-    
+    // mic return
+    //schema.el.control.play();
+
 });
 
 btnAddAudioFile.el.addEventListener("click",async ()=>{
@@ -530,32 +565,58 @@ btnAddAudioFile.el.addEventListener("click",async ()=>{
         addTrack(fileAudio.el.files[x]);
     }
 });
-btnAddImageFile.el.addEventListener("click",async ()=>{
+btnAddImageVideoFile.el.addEventListener("click",async ()=>{
     function addTrack(file) {
         var reader = new FileReader();
         reader.onload = async function(e) {
             var arrayBuffer = this.result;
             var type = file.type.indexOf("image/") !=-1 ? "image" : null;
-            if(type == null) { console.log("not an image file : " + file.name); return; }
-
-            var img = new Image();
-            var blob =  new Blob([arrayBuffer]);
-            img.src = window.URL.createObjectURL(blob);
-            var track = {
-                type : "video",
-                data : {
-                    mime : file.type,
-                    name : file.name,
-                    type : "image",
-                    blob,
-                    el : img
-                },
-                events : []
-            };
-            fileImage.el.value = "";
-            self.app.tracks.push(track);
-            console.log(track);
-            self.app.events.emit("updateTracks");
+            if(type != null) { 
+                var img = new Image();
+                var blob =  new Blob([arrayBuffer]);
+                img.src = window.URL.createObjectURL(blob);
+                var track = {
+                    type : "video",
+                    data : {
+                        mime : file.type,
+                        name : file.name,
+                        type : "image",
+                        blob,
+                        el : img
+                    },
+                    events : []
+                };
+                fileImage.el.value = "";
+                self.app.tracks.push(track);
+                console.log(track);
+                self.app.events.emit("updateTracks");
+            } else {
+                type = file.type.indexOf("video/") != -1 ? "video" : null;
+                if(type != null) {
+                    var blob = new Blob([arrayBuffer]);
+                    var video = document.createElement("video");
+                    video.src = window.URL.createObjectURL(blob);
+                    var stream = video.captureStream();
+                    console.log("video file : " + file.name);
+                    var track = {
+                        type : "video",
+                        data : {
+                            mime : file.type,
+                            name : file.name,
+                            type : "clip",
+                            stream,
+                            el : video
+                        },
+                        events : []
+                    };
+                    video.play();
+                    self.app.tracks.push(track);
+                    console.log(track);
+                    self.app.events.emit("updateTracks");
+                } else {
+                    console.log("not an image file : " + file.name); return; 
+                }
+            }
         }
         reader.readAsArrayBuffer(file);
     }
@@ -796,7 +857,7 @@ async function handleStop(event) {
 
 
 // The nested try blocks will be simplified when Chrome 47 moves to Stable
-function startRecording() {
+async function startRecording() {
 
     if(self.app.video.mode == "none" && self.app.audio.mode == "none" && !self.app.hasAudioTracks()) {
         throw new Error("(you must select some input device)");
@@ -814,14 +875,15 @@ function startRecording() {
     self.app.audio.recordTracks = [];
 
     var audioMixer = audioCtx.createMediaStreamDestination();
-
+    
     if( self.app.audio.mode == "mic" ) {
         var microphone = audioCtx.createMediaStreamSource(audioStream0);
         var microphoneGain = audioCtx.createGain();
         microphone.connect(microphoneGain);
         microphoneGain.gain.value = 0.5;
         microphoneGain.connect(audioMixer);
-        microphone.connect(audioCtx.destination);
+        // no return
+        //microphone.connect(audioCtx.destination);
 
         // stop audio Mixer on audio none, or audio track clear.
     }
@@ -835,7 +897,7 @@ function startRecording() {
                 playback.connect(playbackGain);
                 playbackGain.gain.value = 0.5;
                 playbackGain.connect(audioMixer);
-                playbackGain.connect(audioCtx.destination);
+                //microphone.connect(audioCtx.destination);
                 playback.start();
             }
             console.log("hit",self.app.tracks[n]);
@@ -1113,7 +1175,7 @@ self.app.events.on("updateTracks",async ()=>{
                             // loop
                             console.log("clip");
                             track.data.el.currentTime= 0;
-                            track.data.el.play();     
+                            track.data.el.play();
                             var f = ()=>{
                                 lastTrack = -1;
                                 track.data.el.removeEventListener("ended",self.app.video.clip.handler);
