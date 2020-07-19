@@ -137,6 +137,10 @@
                                 <input id="fileImage" type="file" multiple="true"/>
                                 <button id="btnAddImageVideoFile">add</button>
                             </div>
+                            <div>
+                                text
+                                <button id="btnAddText">add</button>
+                            </div>
 
                         </div>
                     </div>
@@ -144,6 +148,8 @@
                 </div>
             </div>
         </div>
+        <div>🎬 Scene</div>
+
         <div>🎬 Stage</div>
         <div style="display:flex;">
             <button id="btnRecord">start recording</button>
@@ -634,7 +640,21 @@ btnAddImageVideoFile.el.addEventListener("click",async ()=>{
     }
 
 });
-
+var textNb = 0;
+btnAddText.el.addEventListener("click",()=>{
+    var track = {
+        type : "video",
+        data : {
+            name : "text" + textNb,
+            type : "text",
+            value : ""
+        },
+        events : []
+    }
+    textNb++;
+    self.app.tracks.push(track);
+    self.app.events.emit("updateTracks");
+});
 
 cameraDevice = null;
 /*
@@ -1114,20 +1134,41 @@ self.app.events.on("updateTracks",async ()=>{
                 self.app.events.emit("hitTrack",[n]);
             });
         } else if(track.type == "video") {
-            var schema = await tracksView.$.elementPushPacketAsync(`
-                <div style="display:flex;">
-                    <div style="padding-left:5px;padding-right:5px;">🔊 ${(""+n).padStart(2,"0")}</div>
-                    <div style="padding-left:5px;padding-right:5px;width:100px;overflow:hidden;white-space: nowrap;">${track.data.name}</div>
-                    <div style="padding-left:5px;padding-right:5px;"><button id="btnHit">MS</button></div>
-                    <div style="padding-left:5px;padding-right:5px;"><button id="btnPip">PIP</button></div>
-                </div>
-            `);
-            schema.el.btnHit.addEventListener("click",()=>{
-                self.app.events.emit("msTrack",[n]);
-            });
-            schema.el.btnPip.addEventListener("click",()=>{
-                self.app.events.emit("pipTrack",[n]);
-            });
+            if(track.data.type == "text") {
+                var schema = await tracksView.$.elementPushPacketAsync(`
+                    <div style="display:flex;">
+                        <div style="padding-left:5px;padding-right:5px;">🔊 ${(""+n).padStart(2,"0")}</div>
+                        <div style="padding-left:5px;padding-right:5px;width:100px;overflow:hidden;white-space: nowrap;">${track.data.name}</div>
+                        <div><input id="txtValue" type="text"/></div>
+                        <div style="padding-left:5px;padding-right:5px;"><button id="btnHit">MS</button></div>
+                        <div style="padding-left:5px;padding-right:5px;"><button id="btnPip">PIP</button></div>
+                    </div>
+                `);
+                schema.el.txtValue.addEventListener("change",()=>{
+                    track.data.value = schema.el.txtValue.value;
+                });
+                schema.el.btnHit.addEventListener("click",()=>{
+                    self.app.events.emit("msTrack",[n]);
+                });
+                schema.el.btnPip.addEventListener("click",()=>{
+                    self.app.events.emit("pipTrack",[n]);
+                });
+            } else {
+                var schema = await tracksView.$.elementPushPacketAsync(`
+                    <div style="display:flex;">
+                        <div style="padding-left:5px;padding-right:5px;">🔊 ${(""+n).padStart(2,"0")}</div>
+                        <div style="padding-left:5px;padding-right:5px;width:100px;overflow:hidden;white-space: nowrap;">${track.data.name}</div>
+                        <div style="padding-left:5px;padding-right:5px;"><button id="btnHit">MS</button></div>
+                        <div style="padding-left:5px;padding-right:5px;"><button id="btnPip">PIP</button></div>
+                    </div>
+                `);
+                schema.el.btnHit.addEventListener("click",()=>{
+                    self.app.events.emit("msTrack",[n]);
+                });
+                schema.el.btnPip.addEventListener("click",()=>{
+                    self.app.events.emit("pipTrack",[n]);
+                });
+            }
 
         } else if(track.type == "image") {
             var schema = await tracksView.$.elementPushPacketAsync(`
@@ -1156,6 +1197,9 @@ self.app.events.on("updateTracks",async ()=>{
             <div id="mockWidth"></div>
             <canvas id="videoOutput" style="border:solid 1px #000;background-color:#000;"></canvas>
         `);
+
+        
+       
         var videoOutputSize = [parseInt(screenWidth.el.value),parseInt(screenHeight.el.value)];
         schema.el.videoOutput.setAttribute("width",videoOutputSize[0]);
         schema.el.videoOutput.setAttribute("height",videoOutputSize[1]);
@@ -1197,16 +1241,30 @@ self.app.events.on("updateTracks",async ()=>{
                         } else if(track.data.type == "image") {
                             // maybe switching stream to the original may do it faster than printing every frame.
                             ctx.drawImage(track.data.el, 0, 0, track.data.el.width, track.data.el.height, 0, 0, videoOutputSize[0], videoOutputSize[1]);
-                            
-                         } else if(track.data.type == "screen") {
-                         } else if(track.data.type == "camera") {
-                         }
+                        } else if(track.data.type == "text") {
+                            ctx.beginPath();
+                            ctx.fillStyle = "#000";
+                            ctx.rect(0, 0, videoOutputSize[0], videoOutputSize[0]);
+                            ctx.fill();
+                            ctx.beginPath();
+                            ctx.fillStyle = "#0f0";
+                            ctx.font = "100px Arial";
+                            ctx.textAlign = "center";
+                            ctx.textBaseline = "middle";
+                            console.log("TEXT:",track.data.value);
+                            ctx.fillText(track.data.value,videoOutputSize[0]/2,videoOutputSize[1]/2);
+                            ctx.closePath();
+
+                        } else if(track.data.type == "screen") {
+                        } else if(track.data.type == "camera") {
+                        }
                     }
                     lastTrack = self.app.video.msTrack;
                 }
                 if(track.type == "video") { // camera, screen, video asset
                     if(track.data.type == "image") {
                         //ctx.drawImage(track.data.el, 0, 0, track.data.el.width, track.data.el.height, 0, 0, 1920, 1080);
+                    } else if(track.data.type == "text") {
                     } else {
                         ctx.drawImage(track.data.el, 0, 0, track.data.el.videoWidth, track.data.el.videoHeight, 0, 0, videoOutputSize[0], videoOutputSize[1]);
                     }
@@ -1231,12 +1289,40 @@ self.app.events.on("updateTracks",async ()=>{
                             track.data.el.addEventListener("ended",f);
                         } else if(track.data.type == "image") {
                             ctx.drawImage(track.data.el, 0, 0, track.data.el.width, track.data.el.height, 3*nsz[0] - 0.1*nsz[0], 3*nsz[1] - 0.1*nsz[0], nsz[0], nsz[1]);
+                        } else if(track.data.type == "text") {
+
+                            ctx.beginPath();
+                            ctx.fillStyle = "#000";
+                            ctx.rect(3*nsz[0] - 0.1*nsz[0], 3*nsz[1] - 0.1*nsz[0], nsz[0],nsz[1]);
+                            ctx.fill();
+                            ctx.beginPath();
+                            ctx.fillStyle = "#0f0";
+                            ctx.font = "100px Arial";
+                            ctx.textAlign = "center";
+                            ctx.textBaseline = "middle";
+                            console.log("TEXT:",track.data.value);
+                            ctx.fillText(track.data.value,3*nsz[0] - 0.1*nsz[0]+nsz[0]/2,3*nsz[1] - 0.1*nsz[0]+nsz[1]/2);
+                            ctx.closePath();
+
                         }
                     }
                 }
                 if(track.type == "video") {
                     if(track.data.type == "image") {
                         ctx.drawImage(track.data.el, 0, 0, track.data.el.width, track.data.el.height, 3*nsz[0] - 0.1*nsz[0], 3*nsz[1] - 0.1*nsz[0], nsz[0], nsz[1]);    
+                    } else if(track.data.type == "text") {
+                        ctx.beginPath();
+                        ctx.fillStyle = "#000";
+                        ctx.rect(3*nsz[0] - 0.1*nsz[0], 3*nsz[1] - 0.1*nsz[0], nsz[0],nsz[1]);
+                        ctx.fill();
+                        ctx.beginPath();
+                        ctx.fillStyle = "#0f0";
+                        ctx.font = "100px Arial";
+                        ctx.textAlign = "center";
+                        ctx.textBaseline = "middle";
+                        console.log("TEXT:",track.data.value);
+                        ctx.fillText(track.data.value,3*nsz[0] - 0.1*nsz[0]+nsz[0]/2,3*nsz[1] - 0.1*nsz[0]+nsz[1]/2);
+                        ctx.closePath();
                     } else {
                         
                         ctx.drawImage(track.data.el, 0, 0, track.data.el.videoWidth, track.data.el.videoHeight, 3*nsz[0] - 0.1*nsz[0],3*nsz[1]-0.1*nsz[0], nsz[0], nsz[1]);
