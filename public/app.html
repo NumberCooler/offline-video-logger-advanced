@@ -160,7 +160,7 @@
                             <div>
                                 microphone
                                 <select id="mic_devices"></select>
-                                <button id="btnSetMic">set</button>
+                                <button id="btnAddMic">add</button>
                             </div>
                             <div>
                                 audio file
@@ -209,7 +209,7 @@
             <button id="btnPlay">play</button>
             <button id="btnClearStage">clear</button>
             <div style="flex:1;"></div>
-            <button id="btnDownloadMovie">download movie</button>
+            <button id="btnDownloadMovie">download record</button>
         </div>
         
         <div style="padding-left:20px;">
@@ -339,13 +339,15 @@ this.app = {
 };
 
 
-var default_layers = [{ 
+self.app.audio.layers = [];
+
+var default_video_layers = [{ 
     name : "ms", track : -1, lastTrack : -1, grid : [1,1], pos : [0,0]
 },{ 
     name : "pip", track : -1, lastTrack : -1, grid : [2,2], pos : [1,1]
 }];
 
-self.app.video.layers = default_layers;
+self.app.video.layers = default_video_layers;
 self.app.video.layerSelected = null;
 async function add_layer(layer) {
     if(!layer.init) {
@@ -465,7 +467,27 @@ btnClearStage.el.addEventListener("click",()=>{
     self.app.video.output.init = false;
     camera_holder.$.elementsClear();
     tracksView.$.elementsClear();
-    self.app.video.pixi.destroy();
+    if(self.app.video.pixi) self.app.video.pixi.destroy();
+
+    // stop video streams
+    for(var x = 0; x < self.app.tracks.length;x++) {
+        var track = self.app.tracks[x];
+        if(track.type == "video" && ( track.data.type == "camera" || track.data.type == "clip" || track.data.type == "screen")) {
+            track.data.stream.getTracks().forEach((track)=>{
+                track.stop();
+            })
+        }
+    }
+    mic_holder.$.elementsClear();
+    // stop audio streams
+    for(var x = 0; x < self.app.audio.layers.length;x++) {
+        var layer = self.app.audio.layers[x];
+        layer.stream.getTracks().forEach((track)=>{
+            track.stop();
+        });
+    }
+    self.app.audio.layers.splice(0,self.app.audio.layers.length);
+
     self.app.tracks.splice(0,self.app.tracks.length);
     self.app.events.emit("updateTracks");
 });
@@ -566,29 +588,44 @@ async function gotDevices(deviceInfos) {
 }
 
 
+var micNo = 0;
+btnAddMic.el.addEventListener("click",async ()=>{
+    //chkMic.el.style.display = "";
 
-btnSetMic.el.addEventListener("click",async ()=>{
-    chkMic.el.style.display = "";
-
-    self.app.audio.mode = "mic";
     const constraints = {
         audio : {
             deviceId : { exact : mic_devices.el.value }
         }
     };
-
-    var schema = await mic_holder.$.elementSetPacketAsync(`
+    var schema = await mic_holder.$.elementPushPacketAsync(`
         <audio id="control"></audio>
     `);
-
+    var audio_stream = null;
     try {
-        audioStream0 = schema.el.control.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
+        audio_stream = schema.el.control.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
     } catch(e) {
-        audioStream0 = schema.el.control.src = window.URL.createObjectURL(await navigator.mediaDevices.getUserMedia(constraints));
+        audio_stream = schema.el.control.src = window.URL.createObjectURL(await navigator.mediaDevices.getUserMedia(constraints));
     }
+    self.app.audio.layers.push({
+        type : "audio",
+        source : "mic",
+        stream : audio_stream,
+        el : schema.el.control
+    });
+    self.app.tracks.push({
+        type : "audio",
+        source : "mic",
+        data : {
+            name : "mic" + micNo
+        },
+        id : self.genId("TRACK0"),
+        layer : self.app.audio.layers.length,
+        events : []
+    });
+    micNo++;
+    self.app.events.emit("updateTracks");
     // mic return
     //schema.el.control.play();
-
 });
 
 btnAddAudioFile.el.addEventListener("click",async ()=>{
@@ -602,6 +639,7 @@ btnAddAudioFile.el.addEventListener("click",async ()=>{
             var bufferSource = await audio.decodeAudioData(arrayBuffer);
             var track = {
                 type : type,
+                source : "file",
                 id : self.genId("TRACK0"),
                 data : {
                     mime : file.type,
@@ -622,6 +660,8 @@ btnAddAudioFile.el.addEventListener("click",async ()=>{
         addTrack(fileAudio.el.files[x]);
     }
 });
+
+
 btnAddImageVideoFile.el.addEventListener("click",async ()=>{
     function addTrack(file) {
         var reader = new FileReader();
@@ -858,11 +898,21 @@ btnSetVideoNone.el.addEventListener("click",()=>{
     
 });
 btnSetAudioNone.el.addEventListener("click",()=>{
-    chkMic.el.style.display = "none";
-    self.app.audio.mode = "none";
+    
+    
+
+    for(var x = 0; x < self.app.audio.layers.length;x++) {
+        var layer  = self.app.audio.layers[x];
+        layer.stream.getTracks().forEach((track)=>{
+            track.stop();
+        });
+    }
+    self.app.audio.layers.splice(0,self.app.audio.layers.length);
+    /*
     if(audioStream0) audioStream0.getTracks().forEach((track)=>{
         track.stop();
     })
+    */
 });
 
 
@@ -942,13 +992,11 @@ async function handleStop(event) {
 
 // The nested try blocks will be simplified when Chrome 47 moves to Stable
 async function startRecording() { // take 'stream' to MediaRecorder, to setup stream go to 'updateTracks'
-
-    if(self.app.video.mode == "none" && self.app.audio.mode == "none" && !self.app.hasAudioTracks()) {
+    if(!self.app.hasVideoTracks() && !self.app.hasAudioTracks()) {
         throw new Error("(you must select some input device)");
         return;
     }
-    console.log("video mode",self.app.video.mode)
-    console.log("audio mode",self.app.audio.mode)
+
     recordHolder.el.style.display = "";
     recordedBlobs = [];
     if(self.app.events.hitTrack)
@@ -959,17 +1007,15 @@ async function startRecording() { // take 'stream' to MediaRecorder, to setup st
     self.app.audio.recordTracks = [];
 
     var audioMixer = audioCtx.createMediaStreamDestination();
-    
-    if( self.app.audio.mode == "mic" ) {
-        var microphone = audioCtx.createMediaStreamSource(audioStream0);
-        var microphoneGain = audioCtx.createGain();
-        microphone.connect(microphoneGain);
-        microphoneGain.gain.value = 0.5;
-        microphoneGain.connect(audioMixer);
-        // no return
-        //microphone.connect(audioCtx.destination);
 
-        // stop audio Mixer on audio none, or audio track clear.
+    for(var x = 0; x < self.app.audio.layers.length;x++) {
+        var layer = self.app.audio.layers[x];
+        layer.device = {};
+        layer.device.source = audioCtx.createMediaStreamSource(layer.stream);
+        layer.device.gain = audioCtx.createGain();
+        layer.device.source.connect(layer.device.gain);
+        layer.device.gain.gain.value = 0.5;
+        layer.device.gain.connect(audioMixer);
     }
 
     if(self.app.hasAudioTracks()) {
@@ -981,7 +1027,7 @@ async function startRecording() { // take 'stream' to MediaRecorder, to setup st
                 playback.connect(playbackGain);
                 playbackGain.gain.value = 0.5;
                 playbackGain.connect(audioMixer);
-                //microphone.connect(audioCtx.destination);
+                playback.connect(audioCtx.destination);
                 playback.start();
             }
             console.log("hit",self.app.tracks[n]);
@@ -989,16 +1035,23 @@ async function startRecording() { // take 'stream' to MediaRecorder, to setup st
         self.app.events.on("hitTrack",self.app.events.hitTrack);
 
         // null signal to record empty audio space if mic is not activated
-        var nullSignal = audioCtx.createOscillator();
-        nullSignal.type = 'sine';
-        nullSignal.frequency.value = 440;
-        var nullSignalGain = audioCtx.createGain();
-        nullSignalGain.gain.value = -100;
-        nullSignalGain.connect(audioMixer);
-    }
+        var myArrayBuffer = audioCtx.createBuffer(2, audioCtx.sampleRate, audioCtx.sampleRate);
+        for (var channel = 0; channel < myArrayBuffer.numberOfChannels; channel++) {
+            var nowBuffering = myArrayBuffer.getChannelData(channel);
+            for (var i = 0; i < myArrayBuffer.length; i++) {
+                nowBuffering[i] = 0;
+            }
+        }
+        var source = audioCtx.createBufferSource();
+        source.buffer = myArrayBuffer;
+        source.connect(audioMixer);
+        source.loop = true;
+        source.start();
 
+    }
+    
     // mixing audio and video
-    if( ( self.app.audio.mode == "mic" || self.app.hasAudioTracks() ) && self.app.video.mode != "none") {
+    if( ( self.app.hasAudioTracks() ) && self.app.hasVideoTracks() ) {
         console.log("MIXED IN AUDIO AND VIDEO");
         audioMixer.stream
             .getAudioTracks()
@@ -1009,8 +1062,8 @@ async function startRecording() { // take 'stream' to MediaRecorder, to setup st
             });
         
     }
-    
-    if(self.app.video.mode != "none") {
+
+    if( self.app.hasVideoTracks() ) {
         self.app.recordType = "video";
     } else {
         self.app.recordType = "audio";
@@ -1079,7 +1132,6 @@ async function startRecording() { // take 'stream' to MediaRecorder, to setup st
         log(e.message);
     }
 
-    
     log('MediaRecorder started' + mediaRecorder);
 }
 
@@ -1153,7 +1205,7 @@ btnPlay.el.addEventListener("click",()=>{
     if(self.app.recordType == "audio") {
         playscreen.el.style.display = "none";
         self.app.audio.control.play();
-        self.app.audio.mode = "play";
+        
     } else if(self.app.recordType == "video") {
         playscreen.el.style.display = "";
         playaudio.$.elementsClear();
@@ -1526,19 +1578,30 @@ self.app.events.on("updateTracks",async ()=>{
     // make a track from channel template selected.
     async function addTrack(n,track) {
         if(!track.loaded) {
+            console.log(track);
             track.loaded = true;
             track.data.live = []; // mark which layers are transmiting the content.
             if(track.type == "audio") {
-                var schema = await tracksView.$.elementPushPacketAsync(`
-                    <div style="display:flex;">
-                        <div style="padding-left:5px;padding-right:5px;">🔊 ${(""+n).padStart(2,"0")}</div>
-                        <div style="padding-left:5px;padding-right:5px;width:100px;overflow:hidden;white-space: nowrap;">${track.data.name}</div>
-                        <div style="padding-left:5px;padding-right:5px;"><button id="btnHit">hit</button></div>
-                    </div>
-                `);
-                schema.el.btnHit.addEventListener("click",()=>{
-                    self.app.events.emit("hitTrack",[n]);
-                });
+                if(track.source == "file") {
+                    var schema = await tracksView.$.elementPushPacketAsync(`
+                        <div style="display:flex;">
+                            <div style="padding-left:5px;padding-right:5px;">🔊 ${(""+n).padStart(2,"0")}</div>
+                            <div style="padding-left:5px;padding-right:5px;width:100px;overflow:hidden;white-space: nowrap;">${track.data.name}</div>
+                            <div style="padding-left:5px;padding-right:5px;"><button id="btnHit">hit</button></div>
+                        </div>
+                    `);
+                    schema.el.btnHit.addEventListener("click",()=>{
+                        self.app.events.emit("hitTrack",[n]);
+                    });
+                } else if(track.source == "mic") {
+                    var schema = await tracksView.$.elementPushPacketAsync(`
+                        <div style="display:flex;">
+                            <div style="padding-left:5px;padding-right:5px;">🔊 ${(""+n).padStart(2,"0")}</div>
+                            <div style="padding-left:5px;padding-right:5px;width:100px;overflow:hidden;white-space: nowrap;">${track.data.name}</div>
+                        </div>
+                    `);
+                }
+
             } else if(track.type == "video") {
                 if(track.data.type == "text") {
                     var schema = await tracksView.$.elementPushPacketAsync(`
