@@ -10,6 +10,8 @@ var update = false;
 var has_cache = false;
 var cache = null;
 app.get("/list",async (req,res)=>{
+    res.json({result:true,data:[]});
+    return;
     if(!update && has_cache) {
         console.log("cache");
         res.send(cache);
