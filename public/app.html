@@ -59,7 +59,7 @@
     <div>🧊 NumberCooler Recorder Premium</div>
 </div>
 <div id="main" style="display:flex;padding:0px;border-left:solid 10px navy;border-right:solid 10px navy;">
-    <div id="listPanel" style="flex:0.6;overflow:auto;">
+    <div id="listPanel" style="flex:0.2;overflow:auto;">
         <div id="listPanelMock"></div>
         <table border="1" width="100%" cellpadding="0" cellspacing="0">
             <Component id="list"></Component>
@@ -69,9 +69,13 @@
     </div>
     <div style="width:5px;background-color:navy;"></div>
     <div id="mainPanel" style="flex:1;padding:20px;overflow:auto;">
+        <ul>
+            <li>stream channel admin : add queue, schedule, script and priorities, maybe on premium2.</li>
+            <li>fix change stream, live text and db.</li>    
+        </ul>
         
-        <div id="lblSettings" style="cursor:pointer;">🔧 Settings</div>
-        <div id="settingsPanel">
+        <div id="lblOutputSettings" style="cursor:pointer;">🔧 Settings</div>
+        <div id="panelOutputSettings">
             <div style="padding-left:20px;">Output</div>
                 <div style="padding-left:20px;">
                     <div style="padding-left:20px;">
@@ -125,30 +129,37 @@
 
 
         <div>🎬 Scene Stack (layer channel)</div>
-        <ul>
-            <li>stream channel admin : add channel, remove channel. channel : add keyframe, remove keyframe. keyframe : ? a keyframe may go inheriting tracks and channel.</li>
+        
 
             <div style="padding:5px;display:flex;">
-                <div style="display:flex;">
-                    <div><input id="txtLayerChannelName" type="text"/></div><div><button  id="btnAddLayerChannel">add</button></div>
-                </div>
-                <div><button  id="btnRemoveLayerChannel">remove</button></div>
-                <div><button  id="btnUpLayerChannel">up</button></div>
-                <div><button  id="btnDownLayerChannel">down</button></div>
+
             </div>
-            <div style="padding:5px;border:solid 1px #000;">
-                <div><Component id="layerChannelList"></Component></div>
-                
+            <div style="padding:5px;border:solid 1px #000;display:flex;">
+                <div style="flex:1;">
+                    <div style="display:flex;">
+                        <div><button  id="btnFrontLayerChannel">pull to front</button></div>
+                        <div><button  id="btnBackLayerChannel">push to back</button></div>
+                    </div>
+                    <Component id="layerChannelList"></Component>
+                    <div><button  id="btnRemoveLayerChannel">remove</button></div>
+                </div>
+                <div style="flex:1;">
+                    <div style="display:flex;">
+                        <div><input id="txtLayerChannelName" type="text"/></div><div><button  id="btnAddLayerChannel">add</button></div>
+                    </div>
+                    <div>grid <input id="txtLayerChannelGrid" type="text" value="[3,3]"/></div>
+                    <div>pos <input id="txtLayerChannelPos" type="text" value="[2,2]"/></div>
+                    <div>size <input id="txtLayerChannelSize" type="text" value="[1,1]"/></div>
+                </div>
             </div>
             
-        </ul>
 
 
-        <div id="lblSettings" style="cursor:pointer;">🔧 Toolbar</div>
-        <div id="settingsPanel">
+        <div id="lblInputSettings" style="cursor:pointer;">🔧 Toolbar</div>
+        <div id="panelInputSettings">
             <div style="padding-left:20px;">Input</div>
             <div style="padding-left:20px;">
-                <div style="padding-left:20px;">
+                <div style="padding-left:20px;display:flex;">
                     
                     <div>
                         <div>🔊 Audio</div>
@@ -316,7 +327,15 @@ var self = this;
 this.app = {
     events : Class.create("WithEvents"),
     panel : {
-        settings : {
+        input : {
+            visible : true
+        },
+        layer : {
+            gridChange : null,
+            posChange : null,
+            sizeChange : null
+        },
+        output : {
             visible : true
         }
     },
@@ -342,9 +361,9 @@ this.app = {
 self.app.audio.layers = [];
 
 var default_video_layers = [{ 
-    name : "ms", track : -1, lastTrack : -1, grid : [1,1], pos : [0,0]
+    name : "ms", track : -1, lastTrack : -1, grid : [1,1], pos : [0,0], size : [1,1]
 },{ 
-    name : "pip", track : -1, lastTrack : -1, grid : [2,2], pos : [1,1]
+    name : "pip", track : -1, lastTrack : -1, grid : [2,2], pos : [1,1], size : [1,1]
 }];
 
 self.app.video.layers = default_video_layers;
@@ -374,14 +393,35 @@ async function add_layer(layer) {
         });
         schema.el.layer.addEventListener("click",()=>{
             var same = false;
+
             if(self.app.video.layerSelected == layer) {
                 same = true;
             }
-
             if(self.app.video.layerSelected) {
                 self.app.video.layerSelected.schema.$.layer.emit("deselect",[self.app.video.layerSelected]);
             }
             if(!layer.selected) {
+
+                txtLayerChannelGrid.el.value = JSON.stringify(layer.grid);
+                txtLayerChannelPos.el.value = JSON.stringify(layer.pos);
+                txtLayerChannelSize.el.value = JSON.stringify(layer.size);
+                // bind
+                if(self.app.panel.layer.gridChange) {
+                    txtLayerChannelGrid.el.removeEventListener("keyup",self.app.panel.layer.gridChange);
+                }
+                self.app.panel.layer.gridChange = ()=> { layer.grid = JSON.parse(txtLayerChannelGrid.el.value); }
+                txtLayerChannelGrid.el.addEventListener("keyup",self.app.panel.layer.gridChange);
+                if(self.app.panel.layer.posChange) {
+                    txtLayerChannelPos.el.removeEventListener("keyup",self.app.panel.layer.posChange);
+                }
+                self.app.panel.layer.posChange = ()=> { layer.pos = JSON.parse(txtLayerChannelPos.el.value); }
+                txtLayerChannelPos.el.addEventListener("keyup",self.app.panel.layer.posChange);
+                if(self.app.panel.layer.sizeChange) {
+                    txtLayerChannelSize.el.removeEventListener("keyup",self.app.panel.layer.sizeChange);
+                }
+                self.app.panel.layer.sizeChange = ()=> { layer.size = JSON.parse(txtLayerChannelSize.el.value); }
+                txtLayerChannelSize.el.addEventListener("keyup",self.app.panel.layer.sizeChange);
+
                 self.app.video.layerSelected = layer;
                 schema.el.layer.style.backgroundColor = "red";
                 schema.el.layer.style.color = "white";
@@ -398,16 +438,15 @@ async function add_layer(layer) {
             schema.$.control.elementsClear();
         });
         schema.$.layer.on("deselect",(layer)=>{
-            console.log("OK");
             layer.selected = false;
             schema.el.layer.style.backgroundColor = "";
             schema.el.layer.style.color = "";
         });
     }
 }
-function refresh_layerchannels() {
+async function refresh_layerchannels() {
     for(var x = 0; x < self.app.video.layers.length;x++) {
-        add_layer(self.app.video.layers[x]);
+        await add_layer(self.app.video.layers[x]);
     }
 }
 refresh_layerchannels();
@@ -415,27 +454,100 @@ refresh_layerchannels();
 btnAddLayerChannel.el.addEventListener("click",()=>{
     var n = self.app.video.layers.length;
     console.log("add");
-    self.app.video.layers.push({
+    var grid = [n+1,n+1];
+    try { grid = JSON.parse(txtLayerChannelGrid.el.value); } catch(e) { }
+    var pos = [n,n];
+    try { pos = JSON.parse(txtLayerChannelPos.el.value); } catch(e) { }
+    var size = [1,1];
+    try { size = JSON.parse(txtLayerChannelSize.el.value); } catch(e) { }
+    var config = {
         name:txtLayerChannelName.el.value,
-        track : -1, lastTrack : -1, grid : [n,n], pos : [n-1,n-1]
-    });
+        track : -1, lastTrack : -1, grid : grid, pos : pos, size : size
+    };
+    txtLayerChannelName.el.value = "";
+    self.app.video.layers.push(config);
+    console.log(config);
+
     refresh_layerchannels();
 });
 
 btnRemoveLayerChannel.el.addEventListener("click",()=>{
-    if(self.app.video.layerSelected) {
+    console.log("selected",self.app.video.layerSelected)
+    if(self.app.video.layerSelected && self.app.video.layers.length > 1 && self.app.video.layerSelected != self.app.video.layers[0]) {
         for(var x = 0; x < self.app.video.layers.length;x++) {
-            if(self.app.video.layerSelected == self.app.video.layers) {
-                self.app.video.layers.splice(x,0); // remove from db
+            if(self.app.video.layerSelected == self.app.video.layers[x]) {
+                
+                self.app.video.layers.splice(x,1); // remove from db
                 break;
             }
         }
         self.app.video.layerSelected.schema.$.layer.emit("dispose");
         self.app.video.layerSelected = null;
+        console.log("remove");
     }
-    console.log("remove");
 })
 
+btnFrontLayerChannel.el.addEventListener("click",async ()=>{
+    if(self.app.video.layerSelected && self.app.video.layers.length > 0) {
+        for(var x = 0; x < self.app.video.layers.length;x++) {
+            if(self.app.video.layerSelected == self.app.video.layers[x]) {
+                if(x + 1 < self.app.video.layers.length) { // can move to front
+                    var tmp = self.app.video.layers[x];
+                    self.app.video.layers[x] = self.app.video.layers[x+1];
+                    self.app.video.layers[x+1] = tmp;
+
+                    for(var y = x;y < self.app.video.layers.length;y++) {
+                        self.app.video.layers[y].update = true;
+                    }
+                    for(var y = 0; y < self.app.video.layers.length;y++) {
+                        self.app.video.layers[y].init = false;
+                    }
+
+                    // reorder layers on view
+                    layerChannelList.$.elementsClear();
+                    await refresh_layerchannels();
+
+                    self.app.video.layerSelected.schema.el.layer.style.backgroundColor = "red";
+                    self.app.video.layerSelected.schema.el.layer.style.color = "white";
+                    self.app.video.layerSelected.selected = true;
+
+                    // force repaint?
+                    break;
+                }
+            }
+        }
+    }
+});
+btnBackLayerChannel.el.addEventListener("click",async ()=>{
+    if(self.app.video.layerSelected && self.app.video.layers.length > 0) {
+        for(var x = 1; x < self.app.video.layers.length;x++) {
+            if(self.app.video.layerSelected == self.app.video.layers[x]) {
+                if(x >= 1) { // can move to back
+                    var tmp = self.app.video.layers[x];
+                    self.app.video.layers[x] = self.app.video.layers[x-1];
+                    self.app.video.layers[x-1] = tmp;
+
+                    for(var y = x-1;y < self.app.video.layers.length;y++) {
+                        self.app.video.layers[y].update = true;
+                    }
+                    for(var y = 0; y < self.app.video.layers.length;y++) {
+                        self.app.video.layers[y].init = false;
+                    }
+                    // reorder layers on view
+
+                    layerChannelList.$.elementsClear();
+                    await refresh_layerchannels();
+
+                    self.app.video.layerSelected.schema.el.layer.style.backgroundColor = "red";
+                    self.app.video.layerSelected.schema.el.layer.style.color = "white";
+                    self.app.video.layerSelected.selected = true;
+                    // force repaint?
+                    break;
+                }
+            }
+        }
+    }
+});
 
 async function refresh_list(update) {
     var data = null;
@@ -492,16 +604,28 @@ btnClearStage.el.addEventListener("click",()=>{
     self.app.events.emit("updateTracks");
 });
 
-lblSettings.el.addEventListener("click",()=>{
-    if(self.app.panel.settings.visible) {
-        settingsPanel.el.style.display = "none";
-        self.app.panel.settings.visible = false;
+lblInputSettings.el.addEventListener("click",()=>{
+    if(self.app.panel.input.visible) {
+        panelInputSettings.el.style.display = "none";
+        self.app.panel.input.visible = false;
     } else {
-        settingsPanel.el.style.display = "";
-        self.app.panel.settings.visible = true;
+        panelInputSettings.el.style.display = "";
+        self.app.panel.input.visible = true;
 
     }
 })
+
+lblOutputSettings.el.addEventListener("click",()=>{
+    if(self.app.panel.output.visible) {
+        panelOutputSettings.el.style.display = "none";
+        self.app.panel.output.visible = false;
+    } else {
+        panelOutputSettings.el.style.display = "";
+        self.app.panel.output.visible = true;
+
+    }
+})
+
 
 
 // https://rawgit.com/Miguelao/demos/master/mediarecorder.html
@@ -943,7 +1067,6 @@ function toggleRecording() {
     }
 }
 
-
 function handleDataAvailable(event) {
     
     if (event.data && event.data.size > 0) {
@@ -1049,7 +1172,7 @@ async function startRecording() { // take 'stream' to MediaRecorder, to setup st
         source.start();
 
     }
-    
+
     // mixing audio and video
     if( ( self.app.hasAudioTracks() ) && self.app.hasVideoTracks() ) {
         console.log("MIXED IN AUDIO AND VIDEO");
@@ -1332,6 +1455,7 @@ window.addEventListener("keyup",(e)=>{
 
 self.app.events.on("msChange",(context)=>{
     // after ms track
+    return;
     if("msTrack" in self.app.video) {
         var pixi = context.pixi;
         
@@ -1496,17 +1620,23 @@ self.app.events.on("updateTracks",async ()=>{
     console.log("update tracks");
     function setLayerChangeHandler(layer,x) {
         self.app.events.off("layer_"+layer.name+"_change",layer.change);
+        var sellayer = self.app.video.layers[x];
         layer.change = (context)=> {
             var pixi = context.pixi;
-            var track = self.app.tracks[self.app.video.layers[x].track];
-            if(self.app.video.layers[x].lastTrack!=self.app.video.layers[x].track) { // update on layer
+            var res = context.res;
+            if((sellayer.lastTrack!=sellayer.track || sellayer.update) && sellayer.track != -1) { // update on layer
+                sellayer.update = false;
+                console.log(x,sellayer.track);
+                var track = self.app.tracks[sellayer.track];
+                console.log("update layer " + layer.name + " changed ",sellayer.lastTrack,sellayer.track);
                 if(track.type == "video") {
+                    var resize = [res[0]/sellayer.grid[0], res[1]/sellayer.grid[1]];
                     if(track.data.type == "clip") {
                         console.log("clip");
                         track.data.el.currentTime= 0;
                         track.data.el.play();
                         var f = ()=>{
-                            self.app.video.layers[x].lastTrack = -1; // loop clip
+                            sellayer.lastTrack = -1; // loop clip
                             track.data.el.removeEventListener("ended",self.app.video.clip.handler);
                         };
                         self.app.video.clip = {
@@ -1532,33 +1662,33 @@ self.app.events.on("updateTracks",async ()=>{
                             wordWrapWidth: 440,
                         });
                         track.data.style = style;
-                        if(self.app.video.layers[x].msSprite) {
-                            pixi.stage.removeChild(self.app.video.layers[x].msSprite);
-                            self.app.video.layers[x].msSprite.destroy();
-                            self.app.video.layers[x].msSprite = null;
+                        if(sellayer.msSprite) {
+                            pixi.stage.removeChild(sellayer.msSprite);
+                            sellayer.msSprite.destroy();
+                            sellayer.msSprite = null;
                         }
-                        self.app.video.layers[x].msSprite = new PIXI.Text(track.data.value, style);
-                        self.app.video.layers[x].msSprite = pixi.screen.width/2;
-                        self.app.video.layers[x].msSprite = 200;
-                        self.app.video.layers[x].msSprite.x = pixi.screen.width/4;
-                        self.app.video.layers[x].msSprite.y = pixi.screen.height/2-100;
-                        pixi.stage.addChild(self.app.video.layers[x].msSprite);
+                        sellayer.msSprite = new PIXI.Text(track.data.value, style);
+                        sellayer.msSprite.x = sellayer.pos[0]*resize[0];
+                        sellayer.msSprite.y = sellayer.pos[1]*resize[1];
+                        sellayer.msSprite.width = resize[0]*sellayer.size[0];
+                        sellayer.msSprite.height = resize[1]*sellayer.size[1];
+                        pixi.stage.addChild(sellayer.msSprite);
                         track.data.oldValue = track.data.value;
                     }
                     if(track.data.type == "camera" || track.data.type == "screen" || track.data.type == "clip" || track.data.type == "image") {
                         var texture = track.data.texture ? track.data.texture : PIXI.Texture.from(track.data.el);
                         track.data.texture = texture;
-                        if(self.app.video.layers[x].msSprite) {
-                            pixi.stage.removeChild(self.app.video.layers[x].msSprite);
-                            self.app.video.layers[x].msSprite.destroy();
-                            self.app.video.layers[x].msSprite = null;
+                        if(sellayer.msSprite) {
+                            pixi.stage.removeChild(sellayer.msSprite);
+                            sellayer.msSprite.destroy();
+                            sellayer.msSprite = null;
                         }
-                        self.app.video.layers[x].msSprite = new PIXI.Sprite(texture);
-                        self.app.video.layers[x].msSprite.x = 0;
-                        self.app.video.layers[x].msSprite.y = 0;
-                        self.app.video.layers[x].msSprite.width = pixi.screen.width;
-                        self.app.video.layers[x].msSprite.height = pixi.screen.height;
-                        pixi.stage.addChild(self.app.video.layers[x].msSprite);
+                        sellayer.msSprite = new PIXI.Sprite(texture);
+                        sellayer.msSprite.x = sellayer.pos[0]*resize[0];
+                        sellayer.msSprite.y = sellayer.pos[1]*resize[1];
+                        sellayer.msSprite.width = resize[0]*sellayer.size[0];
+                        sellayer.msSprite.height = resize[1]*sellayer.size[1];
+                        pixi.stage.addChild(sellayer.msSprite);
                     }
                 }
 
@@ -1568,17 +1698,23 @@ self.app.events.on("updateTracks",async ()=>{
     }
     var layerButtons = [];
     for(var x = 0; x < self.app.video.layers.length;x++) {
+        console.log("layer buttons ",x);
         var layer = self.app.video.layers[x];
         layerButtons.push(`<div style="padding-left:5px;padding-right:5px;"><button id="btnLayer_${x}">${layer.name}</button></div>`);
         setLayerChangeHandler(layer,x);
     }
     layerButtons = layerButtons.join("");
+
+    // layers may change
     
 
     // make a track from channel template selected.
     async function addTrack(n,track) {
         if(!track.loaded) {
             console.log(track);
+            if(!track) {
+                throw new Error("no track; n=",n);
+            }
             track.loaded = true;
             track.data.live = []; // mark which layers are transmiting the content.
             if(track.type == "audio") {
@@ -1591,6 +1727,15 @@ self.app.events.on("updateTracks",async ()=>{
                         </div>
                     `);
                     schema.el.btnHit.addEventListener("click",()=>{
+                        if (btnRecord.el.textContent === 'start recording') {
+                            var playback = track.data.audio.createBufferSource();
+                            var playbackGain = track.data.audio.createGain();
+                            playback.buffer = self.app.tracks[n].data.buffer;
+                            playback.connect(playbackGain);
+                            playbackGain.gain.value = 0.5;
+                            playback.connect(track.data.audio.destination);
+                            playback.start();
+                        }
                         self.app.events.emit("hitTrack",[n]);
                     });
                 } else if(track.source == "mic") {
@@ -1676,17 +1821,19 @@ self.app.events.on("updateTracks",async ()=>{
                     `);
                     function setHandler(schema,layer,x) {
                         schema.el["btnLayer_" + x].addEventListener("click",()=>{ // works like any pip layer
+                            console.log("click");
                             var found = false;
                             var sel_remove = [];
                             for(var y = 0; y < track.data.live.length;y++) {
                                 if(track.data.live[y].name == layer.name) {
                                     found = true;
-                                    layer.track = n;
                                     if(layer.track == n) { // on/off track
+                                        console.log("off n:",n);
                                         layer.lastTrack = layer.track;
                                         layer.track = -1;
                                         sel_remove.push(y);
                                     } else {
+                                        console.log("on");
                                         layer.lastTrack = layer.track;
                                         layer.track = n;
                                     }
@@ -1697,6 +1844,7 @@ self.app.events.on("updateTracks",async ()=>{
                                 track.data.live.splice(sel_remove[y],1);
                             }
                             if(!found) {
+                                console.log("on 1");
                                 track.data.live.push({name : layer.name });
                                 layer.lastTrack = layer.track;
                                 layer.track = n;
@@ -1767,15 +1915,28 @@ self.app.events.on("updateTracks",async ()=>{
         self.app.video.canvasFlag = true;
         var lastTrack = -1;
         template.lastPipTrack = -1;
+        var first = true;
         self.app.video.outputLoop = async function() {
             if(!self.app.video.canvasFlag) return;
-            console.log("loop");
+
+            if(first) {
+                console.log("output loop");
+                first = false;
+            }
+            //console.log("loop");
             var msChanged = false;
 
+
+            for(var x =0; x < self.app.video.layers.length;x++) {
+                var layer = self.app.video.layers[x];
+                self.app.events.emit("layer_"+layer.name+"_change",[{pixi:pixi,res:videoOutputSize}]);
+            }
             // loop video layers to call ctors of each channel
-            self.app.events.emit("msChange",[{pixi:pixi,res:videoOutputSize,first:true}]);
-            self.app.events.emit("pipChange",[{pixi:pixi,res:videoOutputSize,msChanged}]);
-            console.log("pipTrack",self.app.video.pipTrack == -1);
+            //self.app.events.emit("msChange",[{pixi:pixi,res:videoOutputSize,first:true}]);
+            //self.app.events.emit("pipChange",[{pixi:pixi,res:videoOutputSize,msChanged}]);
+            //console.log("pipTrack",self.app.video.pipTrack == -1);
+
+            /*
             if("pipTrack" in self.app.video && self.app.video.pipTrack == -1 && template.lastPipTrack != -1) { // clear pip from ms;
                 console.log("pipTrackRemove0");
                 if(template.pipSprite) {
@@ -1785,7 +1946,9 @@ self.app.events.on("updateTracks",async ()=>{
                 }
                 template.lastPipTrack = self.app.video.pipTrack;
             }
+
             template.lastPipTrack = self.app.video.pipTrack;
+            */
 
             setTimeout(()=>{
                 self.app.video.outputLoop();
