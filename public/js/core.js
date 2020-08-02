@@ -4325,6 +4325,7 @@ Class.define("Component", {
 			var current_attribute = null;
 			var count = 0;
 			var later_attribs = [];
+			var globalCharPos = -1;
 			/*
 			function ask(stream_clue,partial) {
 				if("ask" in options) {
@@ -4389,7 +4390,7 @@ Class.define("Component", {
 							}
 						}
 						console.log(stack, tag.tagName);
-						throw "odd tag " + tag.tagName;
+						throw "odd tag " + tag.tagName + ":" + globalCharPos;
 					}
 				} else {
 					for(var x = stack.length-1;x >=0;x--) {
@@ -4861,6 +4862,7 @@ Class.define("Component", {
 			}
 			if (Object.prototype.toString.apply(pattern) == "[object String]") {
 				for (var x = 0; x < pattern.length; x++) {
+					globalCharPos = x;
 					var ch = pattern.charAt(x);
 					//console.log(ch,DEBUG_COMPONENT_LEVEL);
 

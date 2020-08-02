@@ -160,6 +160,7 @@ app.post("/send",(req,res)=>{
                 for(var key in text) {
                     text[key] = validString(text[key]);
                 }
+                
                 var data = await new Promise((resolve,reject)=>{
                     connection.query(`
                         INSERT INTO \`comments\`(\`id\`,\`user\`,\`mode\`,\`state\`,\`file\`,\`date\`,\`comment\`)
@@ -171,6 +172,8 @@ app.post("/send",(req,res)=>{
                         resolve(results);
                     });
                 });
+
+
                 fs.writeFileSync("./public/messages/user1/"+id+".ncp",buffer,"binary");
                 // ncp stands for number cooler product
                 console.log("DATA STORED");
@@ -196,7 +199,12 @@ const certificate = fs.readFileSync('server.cert', 'utf8');
 const credentials = {key: privateKey, cert: certificate};
 var httpsServer = https.createServer(credentials, app);
 var port = 83;
-httpsServer.listen(port,"::1",()=>{
+/*
+httpsServer.listen(port,"0.0.0.0",()=>{
+    console.log("listening " + port);
+});
+*/
+httpsServer.listen(port,"::",()=>{
     console.log("listening " + port);
 });
 

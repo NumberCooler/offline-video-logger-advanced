@@ -1,0 +1,85 @@
+<style>
+.close {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 35px;
+    height: 30px;
+    background: #000;
+    color: #fff;
+    cursor: pointer;
+    border: 0;
+}
+.mask {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(52, 73, 94, 0.8);
+    z-index: 50;
+    visibility: hidden;
+    opacity: 0;
+    transition: 0.7s;
+}
+.modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 480px;
+    height: 300px;
+    overflow : auto;
+    margin-left: -200px;
+    margin-top: -150px;
+    background: #bdc3c7;
+    z-index: 100;
+    visibility: hidden;
+    opacity: 0;
+    transition: 0.5s ease-out;
+    transform: translateY(45px);
+}
+.active {
+    visibility: visible;
+    opacity: 1;
+}
+.active + .modal {
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+</style>
+<div id="mask" class="mask" role="dialog"></div>
+<div class="modal" role="alert">
+  <button id="close" class="close" role="button">X</button>
+  <Component id="body">teste</Component>
+</div>
+<script>
+var self = this;
+this.module.exports = {
+    body : { el : body.el, $ : body.$, exports : body.exports },
+    visible : false,
+    show : function() {
+        this.visible = true;
+        mask.el.classList.add("active");
+    },
+    close : function() {
+        this.visible = false;
+        mask.el.classList.remove("active");
+    }
+}
+mask.el.addEventListener("click",()=>{
+    self.module.exports.close();
+});
+close.el.addEventListener("click",()=>{
+    self.module.exports.close();
+});
+window.addEventListener("keyup",(e)=>{
+    if(self.module.exports.visible) {
+        if(e.keyCode == 27) {
+            self.module.exports.close();
+        }
+    }
+});
+</script>
+

@@ -1,3 +1,5 @@
+<Component id="fontModal" src="modal.html" visible="false"></Component>
+
 <script>
     this.fail = false;
     var self = this;
@@ -55,13 +57,16 @@
         margin:0px;
     }
 </style>
+
 <div style="display:flex;background-color:navy;color:white;padding:10px;">
     <div>🧊 NumberCooler Recorder Premium</div>
 </div>
 <div id="main" style="display:flex;padding:0px;border-left:solid 10px navy;border-right:solid 10px navy;">
-    <div id="listPanel" style="flex:0.2;overflow:auto;">
+    <div id="listPanel" style="flex:0.4;overflow:auto;">
         <div id="listPanelMock"></div>
+        <div style="background-color:navy;color:white;">Offline Storage (IndexedDB)</div>
         <table border="1" width="100%" cellpadding="0" cellspacing="0">
+            
             <Component id="list"></Component>
         </table>
         <Component id="message"></Component>
@@ -70,10 +75,19 @@
     <div style="width:5px;background-color:navy;"></div>
     <div id="mainPanel" style="flex:1;padding:20px;overflow:auto;">
         <ul>
-            <li>stream channel admin : add queue, schedule, script and priorities, maybe on premium2.</li>
-            <li>fix change stream, live text and db.</li>    
+            <li>stream channel admin : transitions, queue(each item on queue is a keyframe) aka keyframe manager, schedule, script and priorities, place buttons that trigger scripts at recording time with mouse tracking the click. maybe on premium2.</li>
+            <li>if hit video before start recording just place at 0 time stopped and play on start of recording (clips) -> recording oriented use.</li>
+            <li>fix db (delete asset with confirmation, add description and title, add full text search, including video text and link to that point in video)</li>    
+            <li>font dialog for : track ? layer ?</li>
+            <li>positioning layers with mouse (snaped)</li>
+            <li>stop clip if stream changed to layer. (audio leaking from previous clip)</li>
+            <li>selected layer keyboard:</li>
+            <ul>
+                <li>positioning layer ->(left,right,up,down)</li>
+                <li>sizing layer(+/- vertical, +/- horizontal)</li>
+                <li>setting layer grid (+/- vertical, +/- horizontal)</li>
+            </ul>
         </ul>
-        
         <div id="lblOutputSettings" style="cursor:pointer;">🔧 Settings</div>
         <div id="panelOutputSettings">
             <div style="padding-left:20px;">Output</div>
@@ -150,11 +164,9 @@
                     <div>grid <input id="txtLayerChannelGrid" type="text" value="[3,3]"/></div>
                     <div>pos <input id="txtLayerChannelPos" type="text" value="[2,2]"/></div>
                     <div>size <input id="txtLayerChannelSize" type="text" value="[1,1]"/></div>
+                    <div id="dialogFont">🔤</div>
                 </div>
             </div>
-            
-
-
         <div id="lblInputSettings" style="cursor:pointer;">🔧 Toolbar</div>
         <div id="panelInputSettings">
             <div style="padding-left:20px;">Input</div>
@@ -230,20 +242,8 @@
                     <Component id="tracksView"></Component>
                 </div>
             </div>
-            <script>
-                /*
-                    Camera Hit Tracks
-                    Movie Hit Tracks
-                    Canvas Hit Tracks
-                */
-            </script>
         </div>
-        <div style="display:flex;padding-top:10px;padding-bottom:10px;">
-            <div id="chkMic" style="display:none;padding:5px;background-color:gainsboro;border-radius:20px;padding-left:15px;padding-right:15px;margin-right:10px;">🔴 Mic</div>
-            <div id="chkScreen" style="display:none;padding:5px;background-color:gainsboro;border-radius:20px;padding-left:15px;padding-right:15px;margin-right:10px;">🔴 Screen</div>
-            <div id="chkCamera" style="display:none;padding:5px;background-color:gainsboro;border-radius:20px;padding-left:15px;padding-right:15px;margin-right:10px;">🔴 Camera</div>
-            <div id="chkCanvas" style="display:none;padding:5px;background-color:gainsboro;border-radius:20px;padding-left:15px;padding-right:15px;margin-right:10px;">🔴 Canvas</div>
-        </div>
+        
         <div id="mockHolder"></div>
         <div id="recordHolder">
             <Component id="mic_holder"></Component>
@@ -255,7 +255,9 @@
             <video id="playscreen"></video>
             <Component id="playaudio"></Component>
         </div>
-        <div>
+        <div style="padding:10px;border:solid 1px #000;">
+            Filename:<br/><input id="txtSaveFileName" type="text"/><button id="btnSaveFilenameGenerate">generate</button><br/>
+            Description:<br/><textarea id="txtSaveDescription"></textarea><br/>
             <button id="btnSend">save</button>
         </div>
         <div style="height:40px;"></div>
@@ -267,13 +269,41 @@
 <div style="display:flex;background-color:navy;color:white;padding:10px;">
     <div style="flex:1;"></div><div>📋 Version 1.0 📅 July 2020</div>
 </div>
-
+<Component id="_IDB" src="IDB.html"></Component>
 <script>
+
+
+var self = this;
+var IDB = _IDB.exports;
+
+const AssetSpec = {
+    name : "asset",
+    releases : [{
+        version : 1,
+        schema : {
+            files : {
+                blob : {},
+                _meta : {
+                    index : []
+                }
+            },
+            files_meta : {
+                name : {unique:true},
+                fileid : {},
+                date : {},
+                comments : {},
+                _meta : {
+                    index : ["name","date"]
+                }
+            }
+        }
+    }]
+};
+
 if(this.fail) {
     main.el.style.display = "none";
     message.$.elementSetPacketAsync(`Hello World!`);
 }
-
 
 btnResQVGA.el.addEventListener("click",()=>{
     screenWidth.el.value = "320";
@@ -323,7 +353,7 @@ mainPanel.el.style.height = (window.innerHeight-130) + "px";
 
 
 
-var self = this;
+
 this.app = {
     events : Class.create("WithEvents"),
     panel : {
@@ -360,10 +390,33 @@ this.app = {
 
 self.app.audio.layers = [];
 
+var default_style = {
+    changed : true,
+    fontFamily: 'Arial',
+    fontSize: 20,
+    fontStyle: 'italic',
+    fontWeight: 'bold',
+    fill: ['#ffffff', '#00ff99'], // gradient
+    stroke: '#4a1850',
+    strokeThickness: 3,
+    dropShadow: true,
+    dropShadowColor: '#000000',
+    dropShadowBlur: 2,
+    dropShadowAngle: Math.PI / 6,
+    dropShadowDistance: 2,
+    wordWrap: true
+};
+
 var default_video_layers = [{ 
-    name : "ms", track : -1, lastTrack : -1, grid : [1,1], pos : [0,0], size : [1,1]
+    name : "ms", track : -1, lastTrack : -1, grid : [1,1], pos : [0,0], size : [1,1], style : Object.assign({},default_style)
 },{ 
-    name : "pip", track : -1, lastTrack : -1, grid : [2,2], pos : [1,1], size : [1,1]
+    name : "pip", track : -1, lastTrack : -1, grid : [2,2], pos : [1,1], size : [1,1], style : Object.assign({},default_style)
+},{
+    name : "bottom_subtitle", track :-1, lastTrack : -1,grid:[12,12],pos:[3,10],size:[6,2], style : Object.assign({},default_style)
+},{
+    name : "middle_subtitle", track :-1, lastTrack : -1,grid:[12,12],pos:[3,5],size:[6,2], style : Object.assign({},default_style)
+},{
+    name : "top_subtitle", track :-1, lastTrack : -1,grid:[12,12],pos:[3,0],size:[6,2], style : Object.assign({},default_style)
 }];
 
 self.app.video.layers = default_video_layers;
@@ -402,10 +455,254 @@ async function add_layer(layer) {
             }
             if(!layer.selected) {
 
+                if(self.app.panel.layer.styleClick) {
+                    dialogFont.el.removeEventListener("click",self.app.panel.layer.styleClick);
+                }
+                self.app.panel.layer.styleClick = async ()=>{
+
+                    function getOS() {
+                        var userAgent = window.navigator.userAgent,
+                            platform = window.navigator.platform,
+                            macosPlatforms = ['Macintosh', 'MacIntel', 'MacPPC', 'Mac68K'],
+                            windowsPlatforms = ['Win32', 'Win64', 'Windows', 'WinCE'],
+                            iosPlatforms = ['iPhone', 'iPad', 'iPod'],
+                            os = null;
+
+                        if (macosPlatforms.indexOf(platform) !== -1) {
+                            os = 'Mac OS';
+                        } else if (iosPlatforms.indexOf(platform) !== -1) {
+                            os = 'iOS';
+                        } else if (windowsPlatforms.indexOf(platform) !== -1) {
+                            os = 'Windows';
+                        } else if (/Android/.test(userAgent)) {
+                            os = 'Android';
+                        } else if (!os && /Linux/.test(platform)) {
+                            os = 'Linux';
+                        }
+
+                        return os;
+                    }
+
+                    var font_select_visible = false;
+                    fontModal.exports.body.$.elementsClear();
+
+                    var fonts = [
+                        "Arial",
+                        "Arial Black",
+                        "Calibri",
+                        "Cambria",
+                        "Candara",
+                        "Comic Sans MS",
+                        "Consolas",
+                        "Courier",
+                        "Courier New",
+                        "Fixedsys",
+                        "Helvetica",
+                        "Impact",
+                        "Modern",
+                        "sans-serif",
+                        "Script",
+                        "Segoe Print",
+                        "Segoe Script",
+                        "Small Fonts",
+                        "System",
+                        "Terminal",
+                        "Times New Roman",
+                        "Verdana"
+                    ];
+                    var OS = getOS();
+                    if(OS=="Linux") {
+                        fonts = [
+                            "aakar",
+                            "Droid Sans Fallback",
+                            "Dyuthi",
+                            "Keraleeyam",
+                            "Liberation Serif",
+                            "Lohit Telugu",
+                            "Manjari Thin",
+                            "Navilu",
+                            "Nimbus Roman",
+                            "Purisa",
+                            "Sawasdee",
+                            "Suruma",
+                            "Ubuntu",
+                            "Ubuntu Condensed",
+                            "Uroob",
+                            "URW Gothic",
+                            "Z003"
+                        ];
+                    }
+                    var sel = 0; // Arial
+                    for(var x = 0; x < fonts.length;x++) {
+                        if(fonts[x] == layer.style.fontFamily) {
+                            sel = x;
+                            break;
+                        }
+                    }
+                    var size = 40;
+                    var bold = false;
+                    var italic = false;
+                    size = layer.style.fontSize;
+
+                    if(layer.style.fontStyle == 'italic') {
+                        italic = true;
+                    }
+                    if(layer.style.fontWeight == 'bold') {
+                        bold = true;
+                    }
+                    
+
+                    var sb = [];
+                    for(var x = 0; x < fonts.length;x++) {
+                        sb.push(`
+                            <div id="font${x}" style="cursor:pointer;padding-left:10px;"><span style="font-family:${fonts[x]};font-size:12px;">${fonts[x]}</span></div>
+                        `)
+                    }
+
+                    var schema = await fontModal.exports.body.$.elementSetPacketAsync(`
+                        <div style="font-size:16px;font-weight:bold;padding:6px;padding-left:10px;margin-bottom:40px;background-color:#333;color:white;">Select Text Font:</div>
+                        <div style="padding-left:20px;padding-right:20px;">
+                            <table width="100%" height="160">
+                                <tr height="50">
+                                    <td valign="top">
+                                        <div style="display:flex;">
+                                            <div style="flex:1;"></div>
+                                            <div style="position:relative;max-height:20px;width:154px;max-width:154px;">
+                                                <div style="position:absolute;left:0px;top:0px;max-height:100px;width:150px;overflow-y:auto;padding:2px;background-color:white;border:solid 1px #000;">
+                                                    ${sb.join("")}
+                                                </div>
+                                            </div>
+                                            <div>
+                                            <button id="btnItalic">italics</button>
+                                            <button id="btnBold">bold</button>
+                                            size:<select id="szFont" value="${size}">
+                                                <option value="8">8</option>
+                                                <option value="9">9</option>
+                                                <option value="10">10</option>
+                                                <option value="11">11</option>
+                                                <option value="12">12</option>
+                                                <option value="13">13</option>
+                                                <option value="14">14</option>
+                                                <option value="16">16</option>
+                                                <option value="18">18</option>
+                                                <option value="20" selected>20</option>
+                                                <option value="24">24</option>
+                                                <option value="36">36</option>
+                                                <option value="48">48</option>
+                                                <option value="60">60</option>
+                                                <option value="72">72</option>
+                                                <option value="84">84</option>
+                                                <option value="96">96</option>
+                                            </select>
+                                            </div>
+                                            <div style="flex:1;"></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr height="50">
+                                    <td valign="top" align="center" style="padding:20px;max-height:50px;overflow:hidden;border:solid 1px #000;"><span id="sample">The quick brown fox jumps over the lazy dog</span></td>
+                                </tr>
+                                <tr height="50">
+                                    <td valign="bottom">
+                                        <div style="display:flex;">
+                                            <div style="flex:1;"></div>
+                                            <div style="flex:1;text-align:center;cursor:pointer;">❎ Cancel</div>
+                                            <div style="flex:1;text-align:center;cursor:pointer;">✅ Ok</div>
+                                            <div style="flex:1;"></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    `);
+
+                    function setSample() {
+                        schema.el.sample.style.fontFamily = fonts[sel];
+                        schema.el.sample.style.fontSize = parseInt(schema.el.szFont.value) + "px";
+                        schema.el.sample.style.fontStyle = italic ? 'italic' : 'normal';
+                        schema.el.sample.style.fontWeight = bold ? 'bold' : 'normal';
+
+                        layer.style.changed = true;
+                        layer.style.fontFamily = fonts[sel];
+                        layer.style.fontSize = parseInt(schema.el.szFont.value) + "px";
+                        layer.style.fontStyle = italic ? 'italic' : 'normal';
+                        layer.style.fontWeight = bold ? 'bold' : 'normal';
+
+                    }
+                    setSample();
+                    schema.el.szFont.addEventListener("change",()=>{
+                        setSample();
+                    });
+                    schema.el.btnItalic.addEventListener("click",()=>{
+                        if(italic) {
+                            italic = false;
+                        } else {
+                            italic = true;
+                        }
+                        setSample();
+                    });
+                    schema.el.btnBold.addEventListener("click",()=>{
+                        if(bold) {
+                            bold = false;
+                        } else {
+                            bold = true;
+                        }
+                        setSample();
+                    });
+
+                    function setFontFamily(index) {
+                        schema.el["font"+index].addEventListener("mouseover",()=>{
+                            schema.el["font"+index].style.backgroundColor = "black";
+                            schema.el["font"+index].style.color = "white";
+                        });
+                        schema.el["font"+index].addEventListener("mouseleave",()=>{
+                            schema.el["font"+index].style.backgroundColor = "";
+                            schema.el["font"+index].style.color = "";
+                        });
+                        schema.el["font"+index].addEventListener("click",()=>{
+                            if(font_select_visible) {
+                                // select font
+                                if(index!=sel) {
+                                    layer.style.changed = true;
+                                    layer.style.fontFamily = fonts[index];
+                                    sel = parseInt(index);
+                                }
+                                setSample();
+                                // hide list
+                                for(var x = 0; x < fonts.length;x++) {
+                                    if(sel!=x) {
+                                        schema.el["font"+x].style.display = "none";
+                                    } else {
+                                        schema.el["font"+x].style.display = "";
+                                    }
+                                }
+                                font_select_visible = false;
+                            } else {
+                                // show list
+                                for(var x = 0; x < fonts.length;x++) {
+                                    schema.el["font"+x].style.display = "";
+                                }
+                                font_select_visible = true;
+                            }
+                        });
+                    }
+                    for(var x = 0; x < fonts.length;x++) {
+                        if(x!=sel) {
+                            schema.el["font"+x].style.display = "none";
+                        }
+                        setFontFamily(x);
+                    }
+                    //displayFontDialog();
+                    fontModal.exports.show();
+                }
+                dialogFont.el.addEventListener("click",self.app.panel.layer.styleClick);
+
+                // begin bind grid,pos,size
+
                 txtLayerChannelGrid.el.value = JSON.stringify(layer.grid);
                 txtLayerChannelPos.el.value = JSON.stringify(layer.pos);
                 txtLayerChannelSize.el.value = JSON.stringify(layer.size);
-                // bind
+                
                 if(self.app.panel.layer.gridChange) {
                     txtLayerChannelGrid.el.removeEventListener("keyup",self.app.panel.layer.gridChange);
                 }
@@ -421,11 +718,14 @@ async function add_layer(layer) {
                 }
                 self.app.panel.layer.sizeChange = ()=> { layer.size = JSON.parse(txtLayerChannelSize.el.value); }
                 txtLayerChannelSize.el.addEventListener("keyup",self.app.panel.layer.sizeChange);
+                
+                // end bind
 
                 self.app.video.layerSelected = layer;
                 schema.el.layer.style.backgroundColor = "red";
                 schema.el.layer.style.color = "white";
                 layer.selected = true;
+
             } else {
                 
                 self.app.video.layerSelected = null;
@@ -462,7 +762,7 @@ btnAddLayerChannel.el.addEventListener("click",()=>{
     try { size = JSON.parse(txtLayerChannelSize.el.value); } catch(e) { }
     var config = {
         name:txtLayerChannelName.el.value,
-        track : -1, lastTrack : -1, grid : grid, pos : pos, size : size
+        track : -1, lastTrack : -1, grid : grid, pos : pos, size : size, style : Object.assign({},default_style)
     };
     txtLayerChannelName.el.value = "";
     self.app.video.layers.push(config);
@@ -549,7 +849,15 @@ btnBackLayerChannel.el.addEventListener("click",async ()=>{
     }
 });
 
+
+function displayFontDialog() {
+    fontModal.exports.show();
+}
+
+
+
 async function refresh_list(update) {
+    /*
     var data = null;
     if(update) {
         data = await new Promise((resolve,reject)=>{
@@ -565,12 +873,23 @@ async function refresh_list(update) {
     } else {
         data = await self.refresh_list;
     }
+    */
+   /*
     if(data?.result) {
         schema.$.list.elementsClear();
         for(var x = 0; x < data.data.length;x++) {
             addAsset(data.data[x]);
         }
-    }    
+    }
+    */
+    schema.$.list.elementsClear();
+    var s = await IDB.service(AssetSpec);
+    var list = await s.files_meta.filter((key,val)=> true);
+    console.log(list);
+    for(var x = 0; x < list.length;x++) {
+        addAsset2(list[x]);
+    }
+    
 }
 refresh_list();
 
@@ -646,24 +965,37 @@ self.app.stream = null;
 
 let audioStream0 = null;
 
+try {
+    try {
+        console.log("init1");
+        var stream0 = await navigator.mediaDevices.getUserMedia({audio:true});
+        stream0.getTracks().forEach(function(track) {
+            track.stop();
+        });
+    } catch(e) {}
 
-var stream0 = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-stream0.getTracks().forEach(function(track) {
-    track.stop();
-});
+    try {
+        var stream0 = await navigator.mediaDevices.getUserMedia({video:true});
+        stream0.getTracks().forEach(function(track) {
+            track.stop();
+        });
+    } catch(e) {}
+
+    console.log("init2");
+    navigator.mediaDevices.enumerateDevices()
+    .then(gotDevices)
+    .catch((error)=>{
+        log('Error: '+ error.message);   
+    });
+} catch(e) {
+    console.log(e);
+}
 
 
-navigator.mediaDevices.enumerateDevices()
-  .then(gotDevices)
-  .catch((error)=>{
-    log('Error: '+ error.message);   
-  });
+
 
 async function gotDevices(deviceInfos) {
-    //camera.el.srcObject = await navigator.mediaDevices.getUserMedia({video: true});
-    //getStream();
     
-    //camera.el.srcObject = await navigator.mediaDevices.getUserMedia({video: true});
     var firstAudioOutput = true;
     for (let i = 0; i !== deviceInfos.length; ++i) {
         const deviceInfo = deviceInfos[i];
@@ -714,7 +1046,6 @@ async function gotDevices(deviceInfos) {
 
 var micNo = 0;
 btnAddMic.el.addEventListener("click",async ()=>{
-    //chkMic.el.style.display = "";
 
     const constraints = {
         audio : {
@@ -876,22 +1207,7 @@ btnAddText.el.addEventListener("click",()=>{
 });
 
 cameraDevice = null;
-/*
-btnSetCamera.el.addEventListener("click",async ()=>{
 
-    chkScreen.el.style.display = "none";
-    chkCanvas.el.style.display = "none";
-    chkCamera.el.style.display = "";
-    
-    if(self.app.video.mode == "play") {
-        recordHolder.el.style.display = "";
-        playscreen.el.style.display = "none";
-    }
-    self.app.video.mode = "camera";
-
-    cameraDevice = schema.el.control;
-});
-*/
 var cameraNb = 0;
 btnAddCamera.el.addEventListener("click",async ()=>{
 
@@ -929,10 +1245,7 @@ btnAddCamera.el.addEventListener("click",async ()=>{
 
 /*
 btnSetScreen.el.addEventListener("click",async ()=>{
-    chkScreen.el.style.display = "";
-    chkCanvas.el.style.display = "none";
-    chkCamera.el.style.display = "none";
-
+    
     
     
 
@@ -954,7 +1267,7 @@ btnSetScreen.el.addEventListener("click",async ()=>{
     stream.getTracks().forEach((track)=>{
         track.onended = function(event) {
             log("end of screen capture");
-            chkScreen.el.style.display = "none";
+            
             stopRecording();
         }
     });
@@ -997,10 +1310,7 @@ btnAddScreen.el.addEventListener("click",async ()=>{
 
 btnSetVideoNone.el.addEventListener("click",()=>{
 
-    chkScreen.el.style.display = "none";
-    chkCanvas.el.style.display = "none";
-    chkCamera.el.style.display = "none";
-
+    
 
     if(cameraDevice) {
         cameraDevice.pause();
@@ -1263,7 +1573,7 @@ function stopRecording() {
         mediaRecorder.stop();    
     } else { // user stopped sharing screen.
         self.app.video.mode = "none";
-        chkScreen.el.style.display = "none";
+        
     }
     log('Recorded Blobs: '+ recordedBlobs.length);
     playscreen.el.controls = true;
@@ -1365,9 +1675,42 @@ async function makeNcpBlob(blobs) {
     );
     return ncp_blob;
 }
-
+/*
+<div style="padding:10px;border:solid 1px #000;">
+            Filename:<br/><input id="txtSaveFileName" type="text"/><button id="btnSaveFilenameGenerate">generate</button><br/>
+            Description:<br/><textarea id="txtSaveDescription"></textarea><br/>
+            <button id="btnSend">save</button>
+        </div>
+*/
+btnSaveFilenameGenerate.el.addEventListener("click",()=>{
+    txtSaveFileName.el.value = self.genId("ASSET");
+});
+txtSaveFileName.el.value = self.genId("ASSET");
 btnSend.el.addEventListener("click",async ()=>{
-    var nblob = await makeNcpBlob(recordedBlobs);
+    //var nblob = await makeNcpBlob(recordedBlobs);
+    var s = await IDB.service(AssetSpec);
+    var id = txtSaveFileName.el.value;
+    var fileMeta = await s.files_meta.find("name",id);
+    var blob,type;
+    if(!fileMeta) {
+        if(self.app.hasVideoTracks()) {
+            blob = new Blob(recordedBlobs, {type: 'video/webm'});
+            type = "video.webm";
+        } else {
+            blob = new Blob(recordedBlobs, {type: 'audio/webm'});
+            type = "audio.webm";
+        }
+        var file_id = await s.files.add(blob);
+        var meta_id = await s.files_meta.add({
+            name:id,
+            fileid : file_id, 
+            date : (new Date()).toISOString(), 
+            comments : txtSaveDescription.el.value
+        });
+        refresh_list();
+    }
+
+    /*
     Import({url:"/send",method:"POST",type:Import.Binary,data : nblob })
     .done((data)=>{
         console.log(data);
@@ -1379,12 +1722,8 @@ btnSend.el.addEventListener("click",async ()=>{
         refresh_list(true);
     })
     .send();
+    */
 });
-
-var template = { // default ms pip grid
-    pipGrid : [2,2],
-    pipPos : [1,1]
-};
 
 var keyboard = {
     ctrl : false,
@@ -1403,43 +1742,9 @@ window.addEventListener("keydoown",(e)=>{
 window.addEventListener("keyup",(e)=>{
     //console.log(e.keyCode);
     if(e.keyCode == 37) {
-        if(template.pipPos[0] > 0 ) {
-            template.pipPos[0] -= 1;
-            if(template.pixi) {
-                console.log("call new pip");
-                template.pipChanged = true;
-                self.app.events.emit("pipChange",[{pixi:template.pixi,res:template.videoOutputSize,force:true}]);
-            }
-        }
-        
     } else if(e.keyCode == 38) {
-        if(template.pipPos[1] > 0 ) {
-            template.pipPos[1] -= 1;
-            if(template.pixi) {
-                console.log("call new pip");
-                template.pipChanged = true;
-                self.app.events.emit("pipChange",[{pixi:template.pixi,res:template.videoOutputSize,force:true}]);
-            }
-        }
-
     } else if(e.keyCode == 39) {
-        if(template.pipPos[0] < template.pipGrid[0]-1) {
-            template.pipPos[0] += 1;
-            if(template.pixi) {
-                console.log("call new pip");
-                template.pipChanged = true;
-                self.app.events.emit("pipChange",[{pixi:template.pixi,res:template.videoOutputSize,force:true}]);
-            }
-        }
     } else if(e.keyCode == 40) {
-        if(template.pipPos[1] < template.pipGrid[1]-1) {
-            template.pipPos[1] += 1;
-            if(template.pixi) {
-                console.log("call new pip");
-                template.pipChanged = true;
-                self.app.events.emit("pipChange",[{pixi:template.pixi,res:template.videoOutputSize,force:true}]);
-            }
-        }
     }
 
     
@@ -1452,169 +1757,6 @@ window.addEventListener("keyup",(e)=>{
     }
 });
 
-
-self.app.events.on("msChange",(context)=>{
-    // after ms track
-    return;
-    if("msTrack" in self.app.video) {
-        var pixi = context.pixi;
-        
-        var track = self.app.tracks[self.app.video.layers[0].track];
-        if(self.app.video.layers[0].lastTrack!=self.app.video.layers[0].track) {
-            msChanged = true;
-            if(track.type == "video") {
-                if(track.data.type == "clip") {
-                    console.log("clip");
-                    track.data.el.currentTime= 0;
-                    track.data.el.play();
-                    var f = ()=>{
-                        lastTrack = -1;
-                        track.data.el.removeEventListener("ended",self.app.video.clip.handler);
-                    };
-                    self.app.video.clip = {
-                        handler : f
-                    };
-                    track.data.el.addEventListener("ended",f);
-                } else if(track.data.type == "text") {
-                    console.log("text");
-                    var style = track.data.style ? track.data.style : new PIXI.TextStyle({
-                        fontFamily: 'Arial',
-                        fontSize: 40,
-                        fontStyle: 'italic',
-                        fontWeight: 'bold',
-                        fill: ['#ffffff', '#00ff99'], // gradient
-                        stroke: '#4a1850',
-                        strokeThickness: 3,
-                        dropShadow: true,
-                        dropShadowColor: '#000000',
-                        dropShadowBlur: 2,
-                        dropShadowAngle: Math.PI / 6,
-                        dropShadowDistance: 2,
-                        wordWrap: true,
-                        wordWrapWidth: 440,
-                    });
-                    track.data.style = style;
-                    if(template.msSprite) {
-                        pixi.stage.removeChild(template.msSprite);
-                        template.msSprite.destroy();
-                        template.msSprite = null;
-                    }
-                    template.msSprite = new PIXI.Text(track.data.value, style);
-                    template.msSprite.width = pixi.screen.width/2;
-                    template.msSprite.height = 200;
-                    template.msSprite.x = pixi.screen.width/4;
-                    template.msSprite.y = pixi.screen.height/2-100;
-                    pixi.stage.addChild(template.msSprite);
-                    track.data.oldValue = track.data.value;
-                } 
-
-                if(track.data.type == "camera" || track.data.type == "screen" || track.data.type == "clip" || track.data.type == "image") {
-                    var texture = track.data.texture ? track.data.texture : PIXI.Texture.from(track.data.el);
-                    track.data.texture = texture;
-                    if(template.msSprite) {
-                        pixi.stage.removeChild(template.msSprite);
-                        template.msSprite.destroy();
-                        template.msSprite = null;
-                    }
-                    template.msSprite = new PIXI.Sprite(texture);
-                    template.msSprite.x = 0;
-                    template.msSprite.y = 0;
-                    template.msSprite.width = pixi.screen.width;
-                    template.msSprite.height = pixi.screen.height;
-                    pixi.stage.addChild(template.msSprite);
-                }
-            }
-
-            self.app.video.layers[0].lastTrack = self.app.video.layers[0].track;
-            //lastTrack = self.app.video.msTrack;
-        }
-    }
-});
-self.app.events.on("pipChange",(context)=>{
-    // after pip track
-    var pixi = context.pixi;
-    var videoOutputSize = context.res;
-    var msChanged = context.msChanged;
-    var force = !! context.force;
-    template.pixi = pixi;
-    template.videoOutputSize = videoOutputSize;
-    var nsz = [videoOutputSize[0]/template.pipGrid[0], videoOutputSize[1]/template.pipGrid[1]];
-    var track = self.app.tracks[self.app.video.pipTrack];
-    if("pipTrack" in self.app.video && self.app.video.pipTrack!=-1) {
-        //console.log("pip almost",context.force,template.lastPipTrack!=self.app.video.pipTrack,msChanged);
-        if(!!template.pipChanged || template.lastPipTrack!=self.app.video.pipTrack || msChanged) {
-            template.pipChanged = false;
-            if(track.type == "video") {
-                if(track.data.type == "clip") {
-                    console.log("clip");
-                    track.data.el.currentTime= 0;
-                    track.data.el.play();
-                    var f = ()=>{
-                        lastTrack = -1;
-                        track.data.el.removeEventListener("ended",self.app.video.clip.handler);
-                    };
-                    self.app.video.clip = {
-                        handler : f
-                    };
-                    track.data.el.addEventListener("ended",f);
-                } else if(track.data.type == "text") {
-                    console.log("text0");
-                    var style = track.data.style ? track.data.style : new PIXI.TextStyle({
-                        fontFamily: 'Arial',
-                        fontSize: 40,
-                        fontStyle: 'italic',
-                        fontWeight: 'bold',
-                        fill: ['#eaff00', '#00ff99'], // gradient
-                        stroke: '#4a1850',
-                        strokeThickness: 3,
-                        dropShadow: true,
-                        dropShadowColor: '#000000',
-                        dropShadowBlur: 2,
-                        dropShadowAngle: Math.PI / 6,
-                        dropShadowDistance: 2,
-                        wordWrap: true,
-                        wordWrapWidth: 440,
-                    });
-                    track.data.style = style;
-                    if(template.pipSprite) {
-                        //console.log("removed old ms");
-                        pixi.stage.removeChild(template.pipSprite);
-                        template.pipSprite.destroy();
-                        template.pipSprite = null;
-                    }
-                    
-                    template.pipSprite = new PIXI.Text(track.data.value, style);
-                    template.pipSprite.width = nsz[0];
-                    template.pipSprite.height = nsz[1];
-                    template.pipSprite.x = template.pipPos[0]*nsz[0];
-                    template.pipSprite.y = template.pipPos[1]*nsz[1];
-                    pixi.stage.addChild(template.pipSprite);
-                    track.data.oldValue = track.data.value;
-                } 
-                if(track.data.type == "camera" || track.data.type == "screen" || track.data.type == "clip" || track.data.type == "image") {
-                    var texture = track.data.texture ? track.data.texture : PIXI.Texture.from(track.data.el);
-                    track.data.texture = texture;
-                    if(template.pipSprite) {
-                        pixi.stage.removeChild(template.pipSprite);
-                        template.pipSprite.destroy();
-                        template.pipSprite = null;
-                    }
-                    template.pipSprite = new PIXI.Sprite(texture);
-                    template.pipSprite.x = template.pipPos[0]*nsz[0];
-                    template.pipSprite.y = template.pipPos[1]*nsz[1];
-                    template.pipSprite.width = nsz[0];
-                    template.pipSprite.height = nsz[1];
-                    pixi.stage.addChild(template.pipSprite);
-                    // old version run every frame
-                    // ctx.drawImage(track.data.el, 0, 0, track.data.el.videoWidth, track.data.el.videoHeight, 3*nsz[0] - 0.1*nsz[0],3*nsz[1]-0.1*nsz[0], nsz[0], nsz[1]);
-
-                }
-            }
-        }
-    }
-
-    
-});
 self.app.events.on("updateTracks",async ()=>{
     // do not remove duplicate tracks cause it may be same track name for different folders
     console.log("update tracks");
@@ -1624,7 +1766,7 @@ self.app.events.on("updateTracks",async ()=>{
         layer.change = (context)=> {
             var pixi = context.pixi;
             var res = context.res;
-            if((sellayer.lastTrack!=sellayer.track || sellayer.update) && sellayer.track != -1) { // update on layer
+            if((sellayer.lastTrack!=sellayer.track || sellayer.update || sellayer.style.changed) && sellayer.track != -1) { // update on layer
                 sellayer.update = false;
                 console.log(x,sellayer.track);
                 var track = self.app.tracks[sellayer.track];
@@ -1645,23 +1787,15 @@ self.app.events.on("updateTracks",async ()=>{
                         track.data.el.addEventListener("ended",f);
                     } else if(track.data.type == "text") {
                         console.log("text");
-                        var style = track.data.style ? track.data.style : new PIXI.TextStyle({
-                            fontFamily: 'Arial',
-                            fontSize: 40,
-                            fontStyle: 'italic',
-                            fontWeight: 'bold',
-                            fill: ['#ffffff', '#00ff99'], // gradient
-                            stroke: '#4a1850',
-                            strokeThickness: 3,
-                            dropShadow: true,
-                            dropShadowColor: '#000000',
-                            dropShadowBlur: 2,
-                            dropShadowAngle: Math.PI / 6,
-                            dropShadowDistance: 2,
-                            wordWrap: true,
-                            wordWrapWidth: 440,
-                        });
-                        track.data.style = style;
+                        var style = layer.style.changed? 
+                            new PIXI.TextStyle(layer.style) : 
+                            (
+                                layer.pixi_style ? 
+                                    layer.pixi_style : 
+                                    new PIXI.TextStyle(layer.style) 
+                            );
+                        layer.style.changed = false;
+                        layer.pixi_style = style;
                         if(sellayer.msSprite) {
                             pixi.stage.removeChild(sellayer.msSprite);
                             sellayer.msSprite.destroy();
@@ -1691,6 +1825,7 @@ self.app.events.on("updateTracks",async ()=>{
                         pixi.stage.addChild(sellayer.msSprite);
                     }
                 }
+                //sellayer.lastTrack = sellayer.track;
 
             }
         };
@@ -1706,9 +1841,6 @@ self.app.events.on("updateTracks",async ()=>{
     layerButtons = layerButtons.join("");
 
     // layers may change
-    
-
-    // make a track from channel template selected.
     async function addTrack(n,track) {
         if(!track.loaded) {
             console.log(track);
@@ -1746,7 +1878,6 @@ self.app.events.on("updateTracks",async ()=>{
                         </div>
                     `);
                 }
-
             } else if(track.type == "video") {
                 if(track.data.type == "text") {
                     var schema = await tracksView.$.elementPushPacketAsync(`
@@ -1761,12 +1892,20 @@ self.app.events.on("updateTracks",async ()=>{
                         track.data.value = schema.el.txtValue.value;
                     });
                     schema.el.txtValue.addEventListener("keyup",(e)=>{
-                        if(self.app.video.pipTrack== n && template.pixi) {
-                            track.data.value = schema.el.txtValue.value;
-                            template.pipChanged = true;
-                            // realtime text change if pip layer
-                            self.app.events.emit("pipChange",[{pixi:template.pixi,res:template.videoOutputSize,force:true}]);
+                        if(e.keyCode == 13) {
+                            schema.el.txtValue.value = "";
                         }
+                        track.data.value = schema.el.txtValue.value;
+                        for(var x = 0; x < track.data.live.length;x++) {
+                            var item_layer = track.data.live[x];
+                            for(var y = 0; y < self.app.video.layers.length;y++) {
+                                if(self.app.video.layers[y].name == item_layer.name) {
+                                    console.log("UPDATE TEXT");
+                                    self.app.video.layers[y].update = true;
+                                }
+                            }
+                        }
+                        
                     });
                     function setHandler(schema,layer,x) {
                         schema.el["btnLayer_" + x].addEventListener("click",()=>{ // works like any pip layer
@@ -1779,6 +1918,7 @@ self.app.events.on("updateTracks",async ()=>{
                                     if(layer.track == n) { // on/off track
                                         layer.lastTrack = layer.track;
                                         layer.track = -1;
+
                                         sel_remove.push(y);
                                     } else {
                                         layer.lastTrack = layer.track;
@@ -1805,12 +1945,7 @@ self.app.events.on("updateTracks",async ()=>{
                         var layer = self.app.video.layers[x];
                         setHandler(schema,layer,x);
                     }
-                    schema.el.btnLayer_0.addEventListener("click",()=>{
-                        self.app.events.emit("msTrack",[n]);
-                    });
-                    schema.el.btnLayer_1.addEventListener("click",()=>{
-                        self.app.events.emit("pipTrack",[n]);
-                    });
+                    
                 } else {
                     var schema = await tracksView.$.elementPushPacketAsync(`
                         <div style="display:flex;">
@@ -1859,27 +1994,8 @@ self.app.events.on("updateTracks",async ()=>{
                         var layer = self.app.video.layers[x];
                         setHandler(schema,layer,x);
                     }
-                    schema.el.btnLayer_0.addEventListener("click",()=>{
-                        self.app.events.emit("msTrack",[n]);
-                    });
-                    schema.el.btnLayer_1.addEventListener("click",()=>{
-                        self.app.events.emit("pipTrack",[n]);
-                    });
                 }
-
-            } else if(track.type == "image") {
-                var schema = await tracksView.$.elementPushPacketAsync(`
-                    <div style="display:flex;">
-                        <div style="padding-left:5px;padding-right:5px;">🔊 ${(""+n).padStart(2,"0")}</div>
-                        <div style="padding-left:5px;padding-right:5px;width:100px;overflow:hidden;white-space: nowrap;">${track.data.name}</div>
-                        <div style="padding-left:5px;padding-right:5px;"><button id="btnHit">MS</button></div>
-                    </div>
-                `);
-                schema.el.btnHit.addEventListener("click",()=>{
-                    self.app.events.emit("msTrack",[n]);
-                });
-
-            }
+            } 
         }
     }
 
@@ -1914,7 +2030,7 @@ self.app.events.on("updateTracks",async ()=>{
 
         self.app.video.canvasFlag = true;
         var lastTrack = -1;
-        template.lastPipTrack = -1;
+        
         var first = true;
         self.app.video.outputLoop = async function() {
             if(!self.app.video.canvasFlag) return;
@@ -1923,32 +2039,12 @@ self.app.events.on("updateTracks",async ()=>{
                 console.log("output loop");
                 first = false;
             }
-            //console.log("loop");
             var msChanged = false;
-
 
             for(var x =0; x < self.app.video.layers.length;x++) {
                 var layer = self.app.video.layers[x];
                 self.app.events.emit("layer_"+layer.name+"_change",[{pixi:pixi,res:videoOutputSize}]);
             }
-            // loop video layers to call ctors of each channel
-            //self.app.events.emit("msChange",[{pixi:pixi,res:videoOutputSize,first:true}]);
-            //self.app.events.emit("pipChange",[{pixi:pixi,res:videoOutputSize,msChanged}]);
-            //console.log("pipTrack",self.app.video.pipTrack == -1);
-
-            /*
-            if("pipTrack" in self.app.video && self.app.video.pipTrack == -1 && template.lastPipTrack != -1) { // clear pip from ms;
-                console.log("pipTrackRemove0");
-                if(template.pipSprite) {
-                    pixi.stage.removeChild(template.pipSprite);
-                    template.pipSprite.destroy();
-                    template.pipSprite = null;
-                }
-                template.lastPipTrack = self.app.video.pipTrack;
-            }
-
-            template.lastPipTrack = self.app.video.pipTrack;
-            */
 
             setTimeout(()=>{
                 self.app.video.outputLoop();
@@ -1959,29 +2055,97 @@ self.app.events.on("updateTracks",async ()=>{
         self.app.video.mode = "play";
     } 
 });
+var clipNb = 0;
+async function addAsset2(res) {
 
-self.app.events.on("msTrack",(n)=>{
-    self.app.video.layers[0].track = n;
-    self.app.video.msTrack = n;
-    if(self.app.recordState == "stopped") {
-        recordHolder.el.style.display = "";
-    }
-    // if track is text show panel, else hide
-});
-self.app.events.on("pipTrack",(n)=>{
-    if(self.app.video.pipTrack == n) {
-        self.app.video.pipTrack = -1;
-    } else {
-        self.app.video.pipTrack = n;
-    }
-    if(self.app.recordState == "stopped") {
-        recordHolder.el.style.display = "";
-    }
-    // if track is text show panel, else hide
-});
+    var schema1 = await schema.$.list.elementUnshiftPacketAsync(`
+        <tr style="cursor:pointer;">
+            <td><span id="show">📼</span><span id="download">🔽</span><span id="addAsTrack">📌</span><span id="delete">❌</span></td>
+            <td>${res[1].name} </td>
+        </tr>
+        <tr style="cursor:pointer;">
+            <td colspan="2">
+                <div>${res[1].comments}</div>
+                <Component id="holder"></Component>
+            </td>
+        </tr>
+    `);
+    schema1.el.show.addEventListener("click",async ()=>{
+        var s = await IDB.service(AssetSpec);
+        var blob = await s.files.find(res[1].fileid);
+        console.log(blob);
+        var schema2 = await schema1.$.holder.elementSetPacketAsync(`
+            <div>
+                <video id="video" controls="true"></video>
+            </div>
+        `);
+        schema2.el.video.src = window.URL.createObjectURL(blob);
+        schema2.el.video.style.width = "100%";
+        schema2.el.video.style.marginBottom = "-4px";
+        schema2.el.video.play();
+
+    });
+    schema1.el.download.addEventListener("click",async ()=>{
+        var s = await IDB.service(AssetSpec);
+        var blob = await s.files.find(res[1].fileid);
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = 'last_record.webm';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }, 10000);
+    });
+    schema1.el.addAsTrack.addEventListener("click",async ()=>{
+
+        
+        var s = await IDB.service(AssetSpec);
+        var blob = await s.files.find(res[1].fileid);
+
+        var videoel = document.createElement("video");
+        var url = URL.createObjectURL(blob);
+        videoel.src = url;
+
+        //https://www.html5gamedevs.com/topic/43903-video-visible-size-is-empty/
+        videoel.preload = 'auto';
+        videoel.autoload = true;
 
 
+        var stream = videoel.captureStream();//videoel.srcObject = await webm_blob.stream();
+        var track = {
+            type : "video",
+            id : self.genId("TRACK0"),
+            data : {
+                name : "clip" + clipNb,
+                type : "clip",
+                stream : stream,
+                el : videoel
+            },
+            events : []
+        }
+        clipNb++;
+        self.app.tracks.push(track);
+        self.app.events.emit("updateTracks");
+
+    });
+    schema1.el.delete.addEventListener("click",async ()=>{
+        var filename = window.prompt("To delete, confirm filename:");
+        if(filename == res[1].name) {
+            var s = await IDB.service(AssetSpec);
+            await s.files.delete(res[1].fileid);
+            await s.files_meta.delete(res[0]);
+            refresh_list();
+        }
+
+    });
+}
 async function addAsset(item) {
+    
+
     var visible = false;
     var itemStruct = {
         init : false,
@@ -2034,7 +2198,7 @@ async function addAsset(item) {
             visible = false;
         }
     });
-    var clipNb = 0;
+    
     schema1.el.addAsTrack.addEventListener("click",async ()=>{
         console.log("addAsTrack");
         var data = await fetch(`/messages/user1/${item.file}.ncp`);
@@ -2102,7 +2266,4 @@ async function addAsset(item) {
         load.apply({props:{data:blob}}); // to reuse this.zip same as ncp.super
     });
 }
-
-
-
 </script>
