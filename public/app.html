@@ -217,6 +217,10 @@
                                 text
                                 <button id="btnAddText">add</button>
                             </div>
+                            <div>
+                                html
+                                <button id="btnAddHtml">add</button>
+                            </div>
 
                         </div>
                     </div>
@@ -238,7 +242,7 @@
         <div style="padding-left:20px;">
             <div id="lblTracks" style="display:none;">
                 <div>🛵 Tracks</div>
-                <div style="display:flex;flex-wrap: wrap;">
+                <div>
                     <Component id="tracksView"></Component>
                 </div>
             </div>
@@ -412,6 +416,14 @@ var default_video_layers = [{
 },{ 
     name : "pip", track : -1, lastTrack : -1, grid : [2,2], pos : [1,1], size : [1,1], style : Object.assign({},default_style)
 },{
+    name : "21_left", track :-1, lastTrack : -1,grid:[2,1],pos:[0,0],size:[1,1], style : Object.assign({},default_style)
+},{
+    name : "21_right", track :-1, lastTrack : -1,grid:[2,1],pos:[1,0],size:[1,1], style : Object.assign({},default_style)
+},{
+    name : "12_top", track :-1, lastTrack : -1,grid:[1,2],pos:[0,0],size:[1,1], style : Object.assign({},default_style)
+},{
+    name : "12_bottom", track :-1, lastTrack : -1,grid:[1,2],pos:[0,1],size:[1,1], style : Object.assign({},default_style)
+},{
     name : "bottom_subtitle", track :-1, lastTrack : -1,grid:[12,12],pos:[3,10],size:[6,2], style : Object.assign({},default_style)
 },{
     name : "middle_subtitle", track :-1, lastTrack : -1,grid:[12,12],pos:[3,5],size:[6,2], style : Object.assign({},default_style)
@@ -542,7 +554,6 @@ async function add_layer(layer) {
                     var size = 40;
                     var bold = false;
                     var italic = false;
-                    size = layer.style.fontSize;
 
                     if(layer.style.fontStyle == 'italic') {
                         italic = true;
@@ -1205,6 +1216,22 @@ btnAddText.el.addEventListener("click",()=>{
     self.app.tracks.push(track);
     self.app.events.emit("updateTracks");
 });
+var htmlNb = 0;
+btnAddHtml.el.addEventListener("click",()=>{
+    var track = {
+        type : "video",
+        id : self.genId("TRACK0"),
+        data : {
+            name : "html" + textNb,
+            type : "html",
+            value : ""
+        },
+        events : []
+    }
+    textNb++;
+    self.app.tracks.push(track);
+    self.app.events.emit("updateTracks");
+});
 
 cameraDevice = null;
 
@@ -1763,7 +1790,7 @@ self.app.events.on("updateTracks",async ()=>{
     function setLayerChangeHandler(layer,x) {
         self.app.events.off("layer_"+layer.name+"_change",layer.change);
         var sellayer = self.app.video.layers[x];
-        layer.change = (context)=> {
+        layer.change = async (context)=> {
             var pixi = context.pixi;
             var res = context.res;
             if((sellayer.lastTrack!=sellayer.track || sellayer.update || sellayer.style.changed) && sellayer.track != -1) { // update on layer
@@ -1774,17 +1801,21 @@ self.app.events.on("updateTracks",async ()=>{
                 if(track.type == "video") {
                     var resize = [res[0]/sellayer.grid[0], res[1]/sellayer.grid[1]];
                     if(track.data.type == "clip") {
-                        console.log("clip");
-                        track.data.el.currentTime= 0;
-                        track.data.el.play();
-                        var f = ()=>{
-                            sellayer.lastTrack = -1; // loop clip
-                            track.data.el.removeEventListener("ended",self.app.video.clip.handler);
-                        };
-                        self.app.video.clip = {
-                            handler : f
-                        };
-                        track.data.el.addEventListener("ended",f);
+                        if(!track.data.running) {
+                            track.data.running = true;
+                            console.log("clip");
+                            track.data.el.currentTime= 0;
+                            track.data.el.play();
+                            var f = ()=>{
+                                track.data.running = false;
+                                sellayer.lastTrack = -1; // loop clip
+                                track.data.el.removeEventListener("ended",self.app.video.clip.handler);
+                            };
+                            self.app.video.clip = {
+                                handler : f
+                            };
+                            track.data.el.addEventListener("ended",f);
+                        }
                     } else if(track.data.type == "text") {
                         console.log("text");
                         var style = layer.style.changed? 
@@ -1808,6 +1839,57 @@ self.app.events.on("updateTracks",async ()=>{
                         sellayer.msSprite.height = resize[1]*sellayer.size[1];
                         pixi.stage.addChild(sellayer.msSprite);
                         track.data.oldValue = track.data.value;
+                    } else if(track.data.type == "html") {
+                        console.log("html");
+                        if(!track.data.cache) {
+                            track.data.cache = {};
+                        }
+                        // make a cache of images
+                        function render_html_to_canvas(html, width, height, callback) {
+                            var xml = html_to_xml(html);
+                            xml = xml.replace(/\#/g, '%23');
+                            var data = "data:image/svg+xml;charset=utf-8,"+'<svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="'+height+'">' +
+                                '<foreignObject width="100%" height="100%">' +
+                                xml+
+                                '</foreignObject>' +
+                                '</svg>';
+                            var img = new Image();
+                            img.onload = function () { callback(img); }
+                            img.src = data;
+                        }
+                        function html_to_xml(html) {
+                            var doc = document.implementation.createHTMLDocument('');
+                            doc.write(html);
+                            doc.documentElement.setAttribute('xmlns', doc.documentElement.namespaceURI);
+                            return (new XMLSerializer).serializeToString(doc.body);
+                        }
+                        var img = null;
+                        var size = [320,120];
+                        await new Promise((resolve,reject)=>{
+                            var str = track.data.value + "__" + size[0] + "__" + size[1];
+                            if(str in track.data.cache) {
+                                img = track.data.cache[str];
+                                resolve();
+                            } else {
+                                render_html_to_canvas(track.data.value,size[0],size[1],(loaded_img)=>{
+                                    img = loaded_img;
+                                    track.data.cache[str] = loaded_img;
+                                    resolve();
+                                });
+                            }
+                        });
+                        if(sellayer.msSprite) {
+                            pixi.stage.removeChild(sellayer.msSprite);
+                            sellayer.msSprite.destroy();
+                            sellayer.msSprite = null;
+                        }
+                        var texture = PIXI.Texture.from(img);
+                        sellayer.msSprite = new PIXI.Sprite(texture);
+                        sellayer.msSprite.x = sellayer.pos[0]*resize[0];
+                        sellayer.msSprite.y = sellayer.pos[1]*resize[1];
+                        sellayer.msSprite.width = resize[0]*sellayer.size[0];
+                        sellayer.msSprite.height = resize[1]*sellayer.size[1];
+                        pixi.stage.addChild(sellayer.msSprite);
                     }
                     if(track.data.type == "camera" || track.data.type == "screen" || track.data.type == "clip" || track.data.type == "image") {
                         var texture = track.data.texture ? track.data.texture : PIXI.Texture.from(track.data.el);
@@ -1896,6 +1978,7 @@ self.app.events.on("updateTracks",async ()=>{
                             schema.el.txtValue.value = "";
                         }
                         track.data.value = schema.el.txtValue.value;
+
                         for(var x = 0; x < track.data.live.length;x++) {
                             var item_layer = track.data.live[x];
                             for(var y = 0; y < self.app.video.layers.length;y++) {
@@ -1905,7 +1988,97 @@ self.app.events.on("updateTracks",async ()=>{
                                 }
                             }
                         }
-                        
+                    });
+                    function setHandler(schema,layer,x) {
+                        schema.el["btnLayer_" + x].addEventListener("click",()=>{ // works like any pip layer
+                            var found = false;
+                            var sel_remove = [];
+                            for(var y = 0; y < track.data.live.length;y++) {
+                                if(track.data.live[y].name == layer.name) {
+                                    found = true;
+                                    layer.track = n;
+                                    if(layer.track == n) { // on/off track
+                                        layer.lastTrack = layer.track;
+                                        layer.track = -1;
+
+                                        sel_remove.push(y);
+                                    } else {
+                                        layer.lastTrack = layer.track;
+                                        layer.track = n;
+                                    }
+                                    break;
+                                }
+                            }
+                            for(var y = sel_remove.length-1;y>=0;y--) {
+                                track.data.live.splice(sel_remove[y],1);
+                            }
+                            if(!found) {
+                                track.data.live.push({name : layer.name });
+                                layer.lastTrack = layer.track;
+                                layer.track = n;
+                            }
+                            if(self.app.recordState == "stopped") {
+                                recordHolder.el.style.display = "";
+                            }
+                            self.app.events.emit("layer_"+layer.name+"_hit",[n]);
+                        });
+                    }
+                    for(var x = 0; x < self.app.video.layers.length;x++) {
+                        var layer = self.app.video.layers[x];
+                        setHandler(schema,layer,x);
+                    }
+                    
+                } else if(track.data.type == "html") {
+                    var schema = await tracksView.$.elementPushPacketAsync(`
+                        <div style="display:flex;">
+                            <div style="padding-left:5px;padding-right:5px;">🔊 ${(""+n).padStart(2,"0")}</div>
+                            <div style="padding-left:5px;padding-right:5px;width:100px;overflow:hidden;white-space: nowrap;">${track.data.name}</div>
+                            
+                            ${layerButtons}
+                            
+                        </div>
+                        <div style="display:flex;">
+                            <div>
+                                <textarea id="txtValue" style="width:320px;height:240px;font-size:10px;"></textarea>
+                            </div>
+                            <div>
+                                <textarea id="txtScript" style="width:320px;height:240px;font-size:10px;"></textarea>
+                            </div>
+                        </div>
+                        <div><button id="btnRun">run</button></div>
+                    `);
+
+                    function updateSources() {
+                        for(var x = 0; x < track.data.live.length;x++) {
+                            var item_layer = track.data.live[x];
+                            for(var y = 0; y < self.app.video.layers.length;y++) {
+                                if(self.app.video.layers[y].name == item_layer.name) {
+                                    console.log("UPDATE HTML");
+                                    self.app.video.layers[y].update = true;
+                                }
+                            }
+                        }
+                    }
+                    schema.el.txtValue.addEventListener("change",()=>{
+                        track.data.value = schema.el.txtValue.value;
+                    });
+                    schema.el.txtValue.addEventListener("keyup",(e)=>{
+                        track.data.value = schema.el.txtValue.value;
+                        updateSources();
+                    });
+                    schema.el.btnRun.addEventListener("click",()=>{
+                            
+                        var code = `function target (src) {
+                                console.log("TARGET");
+                                schema.el.txtValue.value = src;
+                                track.data.value = src;
+                                updateSources();
+                            }
+`;
+                        code += schema.el.txtScript.value;
+                        console.log("EVAL",code);
+                        eval(code);
+                        console.log("EVAL END");
                     });
                     function setHandler(schema,layer,x) {
                         schema.el["btnLayer_" + x].addEventListener("click",()=>{ // works like any pip layer
@@ -2040,9 +2213,15 @@ self.app.events.on("updateTracks",async ()=>{
                 first = false;
             }
             var msChanged = false;
-
+            var update = false;
             for(var x =0; x < self.app.video.layers.length;x++) {
                 var layer = self.app.video.layers[x];
+
+                if(layer.update) {
+                    update = true;
+                } else if(update) {
+                    layer.update = true;
+                }
                 self.app.events.emit("layer_"+layer.name+"_change",[{pixi:pixi,res:videoOutputSize}]);
             }
 
