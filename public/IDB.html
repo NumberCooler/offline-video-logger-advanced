@@ -17,6 +17,9 @@
                     precheck = true;
                 }
             }
+
+            
+
             // install current server version
             var request = window.indexedDB.open(spec.name, lastSpec.version);
             request.addEventListener("error",function(event) {
@@ -229,7 +232,7 @@
                 };
                 return new Promise((resolve,reject)=>{
                     request.onsuccess = function(e) {
-                        console.log("OK CURSOR");
+                        console.log("OK CURSOR !");
                         target.used = false;
                         target.cursor = e.target.result;
                         resolve(target);
@@ -239,35 +242,55 @@
             async function _filter(cond) {
                 var list = await _getAllIds();
                 var c = await _cursor();
-                list.sort();
+                list.sort((a,b)=>{
+                    return a > b;
+                });
+                console.log(list);
                 var sel = [];
                 return new Promise(async (resolve,reject)=>{
                     async function print(i) { // loop all files
                         var done = false;
                         if(!c.used) {
+                            console.log("print");
                             c.used = true;
+
                             if(!c.cursor) {
+                                console.log("no cursor");
                                 resolve(sel);
                                 return;
-                            }
-                            if(c.cursor.key == list[i]) { // condition about key or value to filter
+                            } else if(c.cursor.key == list[i]) { // condition about key or value to filter
+                                console.log("has cursor",list[i]);
                                 if( cond(c.cursor.key,c.cursor.value) ) {
                                     sel.push([c.cursor.key,c.cursor.value]);
                                 }
                                 i++;
                                 console.log(i,list);
                                 if(i < list.length) { // condition to end
-
                                     try {
+                                        console.log(1);
                                         c.cursor.continue();
+                                        console.log(2);
                                     } catch(e) {
+                                        console.log(3);
                                         tx = db.transaction(store);
+                                        console.log(4);
                                         obj = tx.objectStore(store);
+                                        console.log(5);
                                         c = await _cursor();
+                                        console.log(6);
                                         c.cursor.continue(list[i]);
+                                        console.log(7);
                                     }
                                     console.log(i,list);
                                 }
+                            } else {
+                                var last = c.cursor.key + 1;
+                                console.log("unkown",list[i],c.cursor.key);
+                                console.log(tx);
+                                tx = db.transaction(store);
+                                obj = tx.objectStore(store);
+                                c = await _cursor();
+                                c.cursor.continue(last);
                             }
                         } 
                         if(i < list.length) { // condition to end

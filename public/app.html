@@ -65,6 +65,17 @@
     <div id="listPanel" style="flex:0.4;overflow:auto;">
         <div id="listPanelMock"></div>
         <div style="background-color:navy;color:white;">Offline Storage (IndexedDB)</div>
+        <div>
+            <div id="lblUpload" style="cursor:pointer;">Upload from Disk</div>
+            <div id="panelUpload" style="padding-left:20px;display:none;">
+                <div>Filename</div>
+                <div><input id="txtUploadFilename" type="text"/></div>
+                <div>Description</div>
+                <div><textarea id="txtUploadDescription" type="text"></textarea></div>
+                <div><input id="fileUpload" type="file"/></div>
+                <div><button id="btnUpload">upload</button></div>
+            </div>
+        </div>
         <table border="1" width="100%" cellpadding="0" cellspacing="0">
             
             <Component id="list"></Component>
@@ -75,12 +86,11 @@
     <div style="width:5px;background-color:navy;"></div>
     <div id="mainPanel" style="flex:1;padding:20px;overflow:auto;">
         <ul>
+            <li>multiple instances of same user and sending stream to each other.</li>
             <li>stream channel admin : transitions, queue(each item on queue is a keyframe) aka keyframe manager, schedule, script and priorities, place buttons that trigger scripts at recording time with mouse tracking the click. maybe on premium2.</li>
             <li>if hit video before start recording just place at 0 time stopped and play on start of recording (clips) -> recording oriented use.</li>
-            <li>fix db (delete asset with confirmation, add description and title, add full text search, including video text and link to that point in video)</li>    
-            <li>font dialog for : track ? layer ?</li>
+            <li>db (add full text search, including video text and link to that point in video)</li>    
             <li>positioning layers with mouse (snaped)</li>
-            <li>stop clip if stream changed to layer. (audio leaking from previous clip)</li>
             <li>selected layer keyboard:</li>
             <ul>
                 <li>positioning layer ->(left,right,up,down)</li>
@@ -130,7 +140,7 @@
                                     </div>
                                 </div>
                             </div>
-                        
+                            <button id="btnNewDisplay">new display</button>
                         </div>
 
                     </div>
@@ -221,7 +231,11 @@
                                 html
                                 <button id="btnAddHtml">add</button>
                             </div>
-
+                            <div>
+                                recorder tab
+                                <select id="selRecorderTab"></select>
+                                <button id="btnAddRecorderTab">add</button>
+                            </div>
                         </div>
                     </div>
                     <div style="height:40px;"></div>
@@ -235,6 +249,7 @@
             <button id="btnRecord">start recording</button>
             <button id="btnPlay">play</button>
             <button id="btnClearStage">clear</button>
+            <input id="chkExportOutput" type="checkbox" checked/>export
             <div style="flex:1;"></div>
             <button id="btnDownloadMovie">download record</button>
         </div>
@@ -357,9 +372,11 @@ mainPanel.el.style.height = (window.innerHeight-130) + "px";
 
 
 
-
 this.app = {
+    id : self.genId("APP"),
     events : Class.create("WithEvents"),
+    channel : new BroadcastChannel('recorder'),
+    externalSources : {},
     panel : {
         input : {
             visible : true
@@ -371,6 +388,9 @@ this.app = {
         },
         output : {
             visible : true
+        },
+        upload : {
+            visible : false
         }
     },
     stream : null,
@@ -390,6 +410,66 @@ this.app = {
     hasAudioTracks : function () { for(var x = 0; x < this.tracks.length;x++) if(this.tracks[x].type == "audio") return true; return false; },
     hasVideoTracks : function () { for(var x = 0; x < this.tracks.length;x++) if(this.tracks[x].type == "video") return true; return false; }
 };
+
+self.app.channel.onmessage = async function (ev) { 
+    if(ev.data.type == "ping") {
+        if(ev.data.id in self.app.externalSources) {
+            self.app.externalSources[ev.data.id].date = new Date();
+        } else {
+            var obj = {
+                id : ev.data.id,
+                buffer : [],
+                date : new Date(),
+                update : false
+            };
+            
+            console.log("connected",ev.data.id);
+            // register as a possible input
+            var schema = await selRecorderTab.$.elementPushPacketAsync(`
+                <Component id="holder">
+                    <option value="${ev.data.id}">${ev.data.id}</option>
+                </Component>
+            `);
+            obj.schema = schema;
+            self.app.externalSources[ev.data.id] = obj;
+        }
+    } else if(ev.data.type == "stream") {
+        var listening = false;
+        for(var x = 0; x < self.app.tracks.length;x++) {
+            var track = self.app.tracks[x];
+            if( track.data.tab == ev.data.id ) {
+                //console.log(track,ev.data.id);
+                listening = true;
+            }
+        }
+        if(listening) {
+            //console.log("RECEIVED");
+            //console.log(ev.data.data);
+            self.app.externalSources[ ev.data.id ].buffer.push( ev.data.data );
+        }
+    } else {
+        console.log(ev.data);
+    }
+}
+
+setInterval(()=>{
+    self.app.channel.postMessage({
+        type : "ping",
+        id : self.app.id
+    });
+    var date = new Date();
+    var sel = [];
+    for(var id in self.app.externalSources) {
+        if( date - self.app.externalSources[id].date > 5000) {
+            console.log("disconnect",id);
+            self.app.externalSources[id].schema.$.holder.elementsClear();
+            sel.push(id);
+        }
+    }
+    for(var x = 0; x < sel.length;x++) {
+        delete self.app.externalSources[sel[x]];
+    }
+},1000);
 
 
 self.app.audio.layers = [];
@@ -866,8 +946,58 @@ function displayFontDialog() {
 }
 
 
+lblUpload.el.addEventListener("click",()=>{
+    if(!self.app.panel.upload.visible) {
+        panelUpload.el.style.display = "";
+        self.app.panel.upload.visible = true;
+    } else {
+        panelUpload.el.style.display = "none";
+        self.app.panel.upload.visible = false;
+    }
+
+});
+
+btnUpload.el.addEventListener("click",()=>{
+    if(fileUpload.el.files.length<=0) return;
+    var file = fileUpload.el.files[0];
+    let reader = new FileReader();
+    reader.onload = async function(e) {
+        let blob = new Blob([new Uint8Array(e.target.result)], {type: file.type });
+
+        var s = await IDB.service(AssetSpec);
+        var id = txtUploadFilename.el.value;
+        var fileMeta = await s.files_meta.find("name",id);
+        
+        if(!fileMeta) {
+            // get blob of file
+            var file_id = await s.files.add(blob);
+            var meta_id = await s.files_meta.add({
+                name:id,
+                fileid : file_id, 
+                date : (new Date()).toISOString(), 
+                comments : txtUploadDescription.el.value
+            });
+            txtUploadFilename.el.value = "";
+            txtUploadDescription.el.value = "";
+            fileUpload.el.value = "";
+
+            panelUpload.el.style.display = "none";
+            self.app.panel.upload.visible = false;
+
+            console.log("UPLOAD");
+            refresh_list();
+        }
+    };
+    reader.readAsArrayBuffer(file);
+
+
+    
+
+
+});
 
 async function refresh_list(update) {
+    console.log("refresh_list");
     /*
     var data = null;
     if(update) {
@@ -894,9 +1024,13 @@ async function refresh_list(update) {
     }
     */
     schema.$.list.elementsClear();
+    console.log("refresh_list before instanciating indexeddb. no calls for async return after IDB.service, lost async (0)");
     var s = await IDB.service(AssetSpec);
+    console.log("refresh_list before filter, lost async (1)");
     var list = await s.files_meta.filter((key,val)=> true);
-    console.log(list);
+    console.log("refresh_list before filter, lost async (2)");
+    console.log(">>",list);
+    console.log("refresh_list",list);
     for(var x = 0; x < list.length;x++) {
         addAsset2(list[x]);
     }
@@ -1375,7 +1509,24 @@ btnSetAudioNone.el.addEventListener("click",()=>{
     })
     */
 });
+var tabNb = 0;
+btnAddRecorderTab.el.addEventListener("click",()=>{
+    var track = {
+        type : "video",
+        id : self.genId("TRACK0"),
+        data : {
+            name : "recordertab"+tabNb,
+            type : "recordertab",
+            tab : selRecorderTab.el.value
+        },
+        events : []
+    };
+    tabNb++;
+    self.app.tracks.push(track);
+    console.log(track);
+    self.app.events.emit("updateTracks");
 
+});
 
 let mediaRecorder;
 let recordedBlobs = [];
@@ -1784,20 +1935,23 @@ window.addEventListener("keyup",(e)=>{
     }
 });
 
+btnNewDisplay.el.addEventListener("click",()=>{
+    self.app.video.output.init = false;
+    self.app.events.emit("updateTracks");
+})
 self.app.events.on("updateTracks",async ()=>{
-    // do not remove duplicate tracks cause it may be same track name for different folders
-    console.log("update tracks");
+    //console.log("update tracks");
     function setLayerChangeHandler(layer,x) {
         self.app.events.off("layer_"+layer.name+"_change",layer.change);
         var sellayer = self.app.video.layers[x];
         layer.change = async (context)=> {
             var pixi = context.pixi;
             var res = context.res;
-            if((sellayer.lastTrack!=sellayer.track || sellayer.update || sellayer.style.changed) && sellayer.track != -1) { // update on layer
+            if((sellayer.update || sellayer.style.changed) && sellayer.track != -1) { // update on layer
                 sellayer.update = false;
-                console.log(x,sellayer.track);
+                //console.log(x,sellayer.track);
                 var track = self.app.tracks[sellayer.track];
-                console.log("update layer " + layer.name + " changed ",sellayer.lastTrack,sellayer.track);
+                //console.log("update layer " + layer.name + " changed ",sellayer.lastTrack,sellayer.track);
                 if(track.type == "video") {
                     var resize = [res[0]/sellayer.grid[0], res[1]/sellayer.grid[1]];
                     if(track.data.type == "clip") {
@@ -1815,6 +1969,25 @@ self.app.events.on("updateTracks",async ()=>{
                                 handler : f
                             };
                             track.data.el.addEventListener("ended",f);
+                        }
+                    } else if(track.data.type == "recordertab") {
+                        //self.app.externalSources
+                        //track.data.tab // tab id
+
+                        if( track.data.tab in self.app.externalSources) {
+                            if( self.app.externalSources[track.data.tab].buffer.length > 0) {
+                                var sel = self.app.externalSources[track.data.tab].buffer.length - 1;
+                                if( track.data.lastExternalSource != sel ) {
+                                    var img = new Image();
+                                    var blob = self.app.externalSources[track.data.tab].buffer[ sel ];
+                                    img.src = window.URL.createObjectURL(blob);
+                                    track.data.el = img;
+                                    track.data.texture = PIXI.Texture.from(track.data.el);
+                                    track.data.lastExternalSource = sel;
+                                    //var texture = track.data.texture ? track.data.texture : PIXI.Texture.from(track.data.el);
+                                    //track.data.texture = texture;
+                                }
+                            }
                         }
                     } else if(track.data.type == "text") {
                         console.log("text");
@@ -1840,13 +2013,13 @@ self.app.events.on("updateTracks",async ()=>{
                         pixi.stage.addChild(sellayer.msSprite);
                         track.data.oldValue = track.data.value;
                     } else if(track.data.type == "html") {
-                        console.log("html");
+                        //console.log("html");
                         if(!track.data.cache) {
                             track.data.cache = {};
                         }
                         // make a cache of images
-                        function render_html_to_canvas(html, width, height, callback) {
-                            var xml = html_to_xml(html);
+                        async function render_html_to_canvas(html, width, height, callback) {
+                            var xml = await html_to_xml(html);
                             xml = xml.replace(/\#/g, '%23');
                             var data = "data:image/svg+xml;charset=utf-8,"+'<svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="'+height+'">' +
                                 '<foreignObject width="100%" height="100%">' +
@@ -1857,11 +2030,51 @@ self.app.events.on("updateTracks",async ()=>{
                             img.onload = function () { callback(img); }
                             img.src = data;
                         }
-                        function html_to_xml(html) {
+                        async function html_to_xml(html) {
                             var doc = document.implementation.createHTMLDocument('');
                             doc.write(html);
+                            
+                            //https://ronvalstar.nl/render-html-to-an-image
+                            function loadImageBase64(src) {
+                                return new Promise((resolve,reject)=>{
+                                    const canvas = document.createElement('canvas')
+                                    const ctx = canvas.getContext('2d')
+                                    const img = document.createElement('img');
+                                    img.crossOrigin = "Anonymous";
+                                    img.addEventListener('error', reject)
+                                    img.addEventListener('load', ({target})=>{
+                                        canvas.width = target.naturalWidth
+                                        canvas.height = target.naturalHeight
+                                        ctx.drawImage(target, 0, 0);
+                                        resolve(canvas.toDataURL());
+                                    });
+                                    img.src = src
+                                });
+                            }
+                            var stack = [doc.documentElement];
+                            async function walk(stack) {
+                                var item = stack.shift();
+                                if(item.tagName == "IMG") {
+                                    var rawimage = await loadImageBase64(item.getAttribute("src"));
+                                    item.setAttribute("src",rawimage);
+                                }
+                                for(var x = 0; x < item.children.length;x++) {
+                                    stack.push(item.children[x]);
+                                }
+                                if(stack.length>0) {
+                                    await walk(stack);
+                                }
+                            }
+                            await walk(stack);
                             doc.documentElement.setAttribute('xmlns', doc.documentElement.namespaceURI);
-                            return (new XMLSerializer).serializeToString(doc.body);
+                            // doc.body -> pass to core
+                            /*
+                            event.emit("load core script");
+                                self.Body = Class.create("UI.Body");
+                                self.Body.nodeBuild(document.body, null);
+                            */
+                            var serial = (new XMLSerializer).serializeToString(doc.body);
+                            return serial;
                         }
                         var img = null;
                         var size = [320,120];
@@ -1891,7 +2104,17 @@ self.app.events.on("updateTracks",async ()=>{
                         sellayer.msSprite.height = resize[1]*sellayer.size[1];
                         pixi.stage.addChild(sellayer.msSprite);
                     }
-                    if(track.data.type == "camera" || track.data.type == "screen" || track.data.type == "clip" || track.data.type == "image") {
+                    if(
+                        (
+                            track.data.type == "camera" || 
+                            track.data.type == "screen" || 
+                            track.data.type == "clip" || 
+                            track.data.type == "image" || 
+                            track.data.type == "recordertab"
+                        ) &&
+                        track.data.el 
+                    ) {
+                        //console.log("update video");
                         var texture = track.data.texture ? track.data.texture : PIXI.Texture.from(track.data.el);
                         track.data.texture = texture;
                         if(sellayer.msSprite) {
@@ -1907,9 +2130,22 @@ self.app.events.on("updateTracks",async ()=>{
                         pixi.stage.addChild(sellayer.msSprite);
                     }
                 }
-                //sellayer.lastTrack = sellayer.track;
-
+            } else if(sellayer.track == -1 && sellayer.lastTrack!=-1) {
+                var track = self.app.tracks[sellayer.lastTrack];
+                if(track.data.type == "clip") {
+                    // check if is the only layer using that track
+                    if(track.data.live.length==0) {
+                        track.data.running = false;
+                        track.data.el.pause();
+                    }
+                }
+                if(sellayer.msSprite) {
+                    pixi.stage.removeChild(sellayer.msSprite);
+                    sellayer.msSprite.destroy();
+                    sellayer.msSprite = null;
+                }
             }
+            sellayer.lastTrack = sellayer.track;
         };
         self.app.events.on("layer_"+layer.name+"_change",layer.change);
     }
@@ -1983,7 +2219,7 @@ self.app.events.on("updateTracks",async ()=>{
                             var item_layer = track.data.live[x];
                             for(var y = 0; y < self.app.video.layers.length;y++) {
                                 if(self.app.video.layers[y].name == item_layer.name) {
-                                    console.log("UPDATE TEXT");
+                                    //console.log("UPDATE TEXT");
                                     self.app.video.layers[y].update = true;
                                 }
                             }
@@ -1991,6 +2227,7 @@ self.app.events.on("updateTracks",async ()=>{
                     });
                     function setHandler(schema,layer,x) {
                         schema.el["btnLayer_" + x].addEventListener("click",()=>{ // works like any pip layer
+                            layer.update = true;
                             var found = false;
                             var sel_remove = [];
                             for(var y = 0; y < track.data.live.length;y++) {
@@ -1998,11 +2235,12 @@ self.app.events.on("updateTracks",async ()=>{
                                     found = true;
                                     layer.track = n;
                                     if(layer.track == n) { // on/off track
+                                        console.log("off n:",n);
                                         layer.lastTrack = layer.track;
                                         layer.track = -1;
-
                                         sel_remove.push(y);
                                     } else {
+                                        console.log("on");
                                         layer.lastTrack = layer.track;
                                         layer.track = n;
                                     }
@@ -2013,6 +2251,7 @@ self.app.events.on("updateTracks",async ()=>{
                                 track.data.live.splice(sel_remove[y],1);
                             }
                             if(!found) {
+                                console.log("on 1");
                                 track.data.live.push({name : layer.name });
                                 layer.lastTrack = layer.track;
                                 layer.track = n;
@@ -2027,7 +2266,7 @@ self.app.events.on("updateTracks",async ()=>{
                         var layer = self.app.video.layers[x];
                         setHandler(schema,layer,x);
                     }
-                    
+
                 } else if(track.data.type == "html") {
                     var schema = await tracksView.$.elementPushPacketAsync(`
                         <div style="display:flex;">
@@ -2038,22 +2277,23 @@ self.app.events.on("updateTracks",async ()=>{
                             
                         </div>
                         <div style="display:flex;">
-                            <div>
+                            <div id="renderTarget" style="display:none;">
+                                renderTarget:<br/>
                                 <textarea id="txtValue" style="width:320px;height:240px;font-size:10px;"></textarea>
                             </div>
                             <div>
+                                code:<br/>
                                 <textarea id="txtScript" style="width:320px;height:240px;font-size:10px;"></textarea>
                             </div>
                         </div>
-                        <div><button id="btnRun">run</button></div>
+                        <div><button id="btnRun">run</button><button id="btnToogleRender">show render</button></div>
                     `);
-
                     function updateSources() {
                         for(var x = 0; x < track.data.live.length;x++) {
                             var item_layer = track.data.live[x];
                             for(var y = 0; y < self.app.video.layers.length;y++) {
                                 if(self.app.video.layers[y].name == item_layer.name) {
-                                    console.log("UPDATE HTML");
+                                    //console.log("UPDATE HTML");
                                     self.app.video.layers[y].update = true;
                                 }
                             }
@@ -2066,16 +2306,48 @@ self.app.events.on("updateTracks",async ()=>{
                         track.data.value = schema.el.txtValue.value;
                         updateSources();
                     });
-                    schema.el.btnRun.addEventListener("click",()=>{
-                            
-                        var code = `function target (src) {
+                    var renderVisible = false;
+                    schema.el.btnToogleRender.addEventListener("click",()=>{
+                        if(renderVisible) {
+                            schema.el.renderTarget.style.display = "none";
+                            schema.el.btnToogleRender.textContent = 'show render';
+                            renderVisible = false;
+                        } else {
+                            schema.el.renderTarget.style.display = "";
+                            schema.el.btnToogleRender.textContent = 'hide render';
+                            renderVisible = true;
+                        }
+                    });
+                    schema.el.btnRun.addEventListener("click",async function() {
+                        
+                        var code = `
+
+                            function getLayers() {
+                                var sel = [];
+                                for(var y = 0; y < track.data.live.length;y++) {
+                                    for(var x = 0; x < self.app.video.layers.length;x++) {
+                                        var layer = self.app.video.layers[x];
+                                        if(track.data.live[y].name == layer.name) {
+                                            sel.push(layer);
+                                            break;
+                                        }
+                                    }
+                                }
+                                return sel;
+                            }
+                            function target (src) {
                                 console.log("TARGET");
                                 schema.el.txtValue.value = src;
                                 track.data.value = src;
                                 updateSources();
                             }
+                            {
+                            let self = null;
+                            let schema = null;
+                            let track = null;
 `;
                         code += schema.el.txtScript.value;
+                        code += "}";
                         console.log("EVAL",code);
                         eval(code);
                         console.log("EVAL END");
@@ -2118,7 +2390,6 @@ self.app.events.on("updateTracks",async ()=>{
                         var layer = self.app.video.layers[x];
                         setHandler(schema,layer,x);
                     }
-                    
                 } else {
                     var schema = await tracksView.$.elementPushPacketAsync(`
                         <div style="display:flex;">
@@ -2129,6 +2400,7 @@ self.app.events.on("updateTracks",async ()=>{
                     `);
                     function setHandler(schema,layer,x) {
                         schema.el["btnLayer_" + x].addEventListener("click",()=>{ // works like any pip layer
+                            layer.update = true;
                             console.log("click");
                             var found = false;
                             var sel_remove = [];
@@ -2185,10 +2457,16 @@ self.app.events.on("updateTracks",async ()=>{
         var schema = await camera_holder.$.elementSetPacketAsync(`
             <div id="mockWidth"></div>
             <canvas id="videoOutput" style="border:solid 1px #000;background-color:#000;"></canvas>
+            <video id="mockimg" style="display:none;"></video>
+            <canvas id="videoOutputCopy" style="border:solid 1px #000;background-color:#000;display:none;"></canvas>
         `);
         var videoOutputSize = [parseInt(screenWidth.el.value),parseInt(screenHeight.el.value)];
         schema.el.videoOutput.setAttribute("width",videoOutputSize[0]);
         schema.el.videoOutput.setAttribute("height",videoOutputSize[1]);
+
+        schema.el.videoOutputCopy.setAttribute("width",videoOutputSize[0]);
+        schema.el.videoOutputCopy.setAttribute("height",videoOutputSize[1]);
+
         if(videoOutputSize[0] < schema.el.mockWidth.offsetWidth) {
             schema.el.videoOutput.style.width = videoOutputSize[0] + 'px';
         } else {
@@ -2224,14 +2502,27 @@ self.app.events.on("updateTracks",async ()=>{
                 }
                 self.app.events.emit("layer_"+layer.name+"_change",[{pixi:pixi,res:videoOutputSize}]);
             }
-
             setTimeout(()=>{
                 self.app.video.outputLoop();
-            },10);
+            },1000/60);
         };
         self.app.video.outputLoop();
         self.app.stream = stream = schema.el.videoOutput.captureStream(60);
+        schema.el.mockimg.srcObject = stream;
+        schema.el.mockimg.play();
+        setInterval(async ()=>{
+            if(chkExportOutput.el.checked) {
+                const ctx = schema.el.videoOutputCopy.getContext('2d');
+                ctx.clearRect(0, 0, videoOutputSize[0],videoOutputSize[1]);
+                ctx.drawImage(schema.el.mockimg,0,0);
+                schema.el.videoOutputCopy.toBlob(function(blob) {
+                    self.app.channel.postMessage({type:"stream",id:self.app.id,data:blob});
+                });
+            }
+        },1000/24);
+        
         self.app.video.mode = "play";
+
     } 
 });
 var clipNb = 0;
