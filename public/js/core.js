@@ -1685,7 +1685,7 @@ BinaryWriter.prototype.add = function(array_buffer) {
     this.data.push(array_buffer);
     return this;
 }
-BinaryWriter.prototype.blob = function(){
+BinaryWriter.prototype.toBlob = function(){
     return new Blob(this.data);
 }
 
@@ -1706,17 +1706,13 @@ BinaryReader.prototype.u16 = function() {
     return dv.getUint16(0,true);
 }
 BinaryReader.prototype.u32 = function() {
-    console.log("POS",this.pos);
     var dv = new DataView(this.data,this.pos,4);
     this.pos += 4;
     return dv.getUint32(0,true);
 }
 BinaryReader.prototype.toBlob = function(size) {
-
-    console.log("POS",this.pos,size);
     var p = this.pos;
     this.pos += size;
-    console.log("POS",this.pos);
     return this.blob.slice(p, p+size);
 }
 BinaryReader.prototype.seek = function(rel) {
@@ -6281,6 +6277,9 @@ Class.define("DeviceResolution", {
 });
 
 /*
+
+var data = Class.create("UI.Body");
+self.Body.nodeBuild(document.body, null);
 
 var data = Class.create("UI.Body");
 self.Body.nodeBuild(document.body, null);

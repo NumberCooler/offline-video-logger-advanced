@@ -3,16 +3,18 @@
     }
     IDB.install = async function(spec) {
         return new Promise(async (resolve,reject)=>{
-            console.log("install 0");
+            //console.log("install 0");
             // check current client version installed
             var lastSpec = spec.releases[spec.releases.length-1];
+            var lastSpecVersion = lastSpec.version;
+
             var dblist = await window.indexedDB.databases();
-            console.log("install 0.1");
+            //console.log("install 0.1");
             //console.log( "databases", dblist );
 
             var precheck = false;
             for(var x = 0; x < dblist.length;x++) {
-                console.log( `name: ${dblist[x].name} version: ${dblist[x].version}` );
+                //console.log( `name: ${dblist[x].name} version: ${dblist[x].version}` );
                 if(spec.name == dblist[x].name && lastSpec.version == dblist[x].version) {
                     precheck = true;
                 }
@@ -28,7 +30,7 @@
             });
             var upgrade = false;
             request.addEventListener("success",function(event) {
-                console.log("db open sucess");
+                
                 //console.log(event);
                 var db = event.target.result;
                 //console.log(db);
@@ -59,11 +61,11 @@
             request.addEventListener("blocked",function(event) {
                 console.log("Please close all other tabs with this site open!");
             });
-            request.addEventListener("upgradeneeded",function(event) { 
+            request.addEventListener("upgradeneeded",async function(event) { 
                 console.log("upgrade");
-                console.log(event);
+                //console.log(event);
                 var db = event.target.result; //IDBDatabase
-                console.log(db);
+                //console.log(db);
                 // find last version
                 var max = -1;
                 var speccur = -1;
@@ -107,19 +109,52 @@
                     }
                     // install seeds
                 }
+                
+                // new tables
                 for(var key in lastSpec.schema) {
-                    if( speccur == -1 || !(key in spec.releases[ speccur ].schema)) {
+                    if( speccur == -1 || !(key in spec.releases[ speccur ].schema)) { 
+                        // if in cur spec do not have last spec key
+                        //      try to install missing indexes
                         HandleStore(db.createObjectStore(key,{ autoIncrement : true }),key);
                     } else {
                         // migration code, such as add new indexes and update default values to the index if it has.
-                        console.log("migration not specified.");
-                        request.transaction.abort();
-                        throw new Error("migration not specified.");
+                        //console.log("migration not specified.");
+                        
+                        //throw new Error("migration not specified.");
                     }
                 }
+                // call a callback to migrate deleted tables
+                if(speccur!=-1) {
+                    var migrate_name = ("migrate_" + spec.releases[ speccur ].version +"_" +lastSpecVersion);
+                    if( migrate_name in lastSpec) {
+                        var type = Object.prototype.toString.apply(lastSpec[migrate_name]);
+                        if(type == "[object Boolean]" && lastSpec[migrate_name]) {
+                            // pass ok
+                        } else if(type == "[object Function]") {
+                            lastSpecVersion[migrate_name](db);
+                        } else if(type == "[object AsyncFunction]") {
+                            await lastSpecVersion[migrate_name](db);
+                        } else {
+                            request.transaction.abort();
+                            throw new Error("migration not specified : type error");
+                        }
+                    } else {
+                        request.transaction.abort();
+                        throw new Error("migration not specified : not found :" + migrate_name);
+                    }
+
+                    // deleted tables
+                    for(var key in spec.releases[ speccur ].schema) {
+                        if(!(key in lastSpec.schema)) { // deleted store (must use data before deletion)
+                            db.deleteObjectStore(key);
+                        }
+                    }
+
+                }
+
                 upgrade = true;
             });
-            console.log("install 1");
+            
         });
     }
     IDB.service = async function(spec) {
@@ -146,9 +181,9 @@
             });
         }
         var ret = {};
-        console.log("install begin");
+        //console.log("install begin");
         var db = await IDB.install(spec);
-        console.log("install end");
+        //console.log("install end");
         //console.log("resolved",db);
 
         ret.getTx = function(store) {
@@ -156,7 +191,7 @@
             var obj = tx.objectStore(store);
             var id = genId("GETTX");
             tx.oncomplete = function(event) {
-                console.log("All done 1! (" + id + ")");
+                //console.log("All done 1! (" + id + ")");
             };
             tx.onerror = function(event) {
                 console.log("Error1! (" + id + ") : " + event.message);
@@ -232,7 +267,7 @@
                 };
                 return new Promise((resolve,reject)=>{
                     request.onsuccess = function(e) {
-                        console.log("OK CURSOR !");
+                        
                         target.used = false;
                         target.cursor = e.target.result;
                         resolve(target);
@@ -245,48 +280,48 @@
                 list.sort((a,b)=>{
                     return a > b;
                 });
-                console.log(list);
+                
                 var sel = [];
                 return new Promise(async (resolve,reject)=>{
                     async function print(i) { // loop all files
                         var done = false;
                         if(!c.used) {
-                            console.log("print");
+                            
                             c.used = true;
 
                             if(!c.cursor) {
-                                console.log("no cursor");
+                                //console.log("no cursor");
                                 resolve(sel);
                                 return;
                             } else if(c.cursor.key == list[i]) { // condition about key or value to filter
-                                console.log("has cursor",list[i]);
+                                
                                 if( cond(c.cursor.key,c.cursor.value) ) {
                                     sel.push([c.cursor.key,c.cursor.value]);
                                 }
                                 i++;
-                                console.log(i,list);
+                                
                                 if(i < list.length) { // condition to end
                                     try {
-                                        console.log(1);
+                                        
                                         c.cursor.continue();
-                                        console.log(2);
+                                        
                                     } catch(e) {
-                                        console.log(3);
+                                        
                                         tx = db.transaction(store);
-                                        console.log(4);
+                                        
                                         obj = tx.objectStore(store);
-                                        console.log(5);
+                                        
                                         c = await _cursor();
-                                        console.log(6);
+                                        
                                         c.cursor.continue(list[i]);
-                                        console.log(7);
+                                        
                                     }
-                                    console.log(i,list);
+                                    
                                 }
                             } else {
                                 var last = c.cursor.key + 1;
-                                console.log("unkown",list[i],c.cursor.key);
-                                console.log(tx);
+                                //console.log("unkown",list[i],c.cursor.key);
+                                
                                 tx = db.transaction(store);
                                 obj = tx.objectStore(store);
                                 c = await _cursor();
@@ -325,11 +360,11 @@
             var ret = {};
             tx.oncomplete = function(event) {
                 if(ok && !lockErr) {
-                    console.log("All done 2! (" + id + ")");
+                    //console.log("All done 2! (" + id + ")");
                     ok();
                 }
                 if(!ok) {
-                    console.log("All done 3! (" + id + ")");
+                    //console.log("All done 3! (" + id + ")");
                 }
             };
             tx.onerror = function(event) {
@@ -500,6 +535,17 @@
                     return await new Promise(async (resolve,reject)=>{
                         var b = ret.setTx(table,()=>{ resolve(_id); },()=>{ reject("CANT ADD ",value); });
                         _id = await b.putSync(value);
+                        b.commit();
+                    });
+                },
+                update : async function(id,value) {
+                    return await new Promise(async (resolve,reject) => {
+                        var b = ret.setTx(table,()=>{
+                            resolve();
+                        },()=>{ 
+                            reject("CANT ADD",value); 
+                        });
+                        await b.putAsync(value,id);
                         b.commit();
                     });
                 },

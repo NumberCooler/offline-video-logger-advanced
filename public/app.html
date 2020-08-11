@@ -86,9 +86,7 @@
     <div style="width:5px;background-color:navy;"></div>
     <div id="mainPanel" style="flex:1;padding:20px;overflow:auto;">
         <ul>
-            <li>multiple instances of same user and sending stream to each other.</li>
             <li>stream channel admin : transitions, queue(each item on queue is a keyframe) aka keyframe manager, schedule, script and priorities, place buttons that trigger scripts at recording time with mouse tracking the click. maybe on premium2.</li>
-            <li>if hit video before start recording just place at 0 time stopped and play on start of recording (clips) -> recording oriented use.</li>
             <li>db (add full text search, including video text and link to that point in video)</li>    
             <li>positioning layers with mouse (snaped)</li>
             <li>selected layer keyboard:</li>
@@ -163,6 +161,9 @@
                     <div style="display:flex;">
                         <div><button  id="btnFrontLayerChannel">pull to front</button></div>
                         <div><button  id="btnBackLayerChannel">push to back</button></div>
+                        <div style="flex:1;"></div>
+                        <div><button  id="btnLayerChannelSaveAll">save all</button></div>
+
                     </div>
                     <Component id="layerChannelList"></Component>
                     <div><button  id="btnRemoveLayerChannel">remove</button></div>
@@ -251,6 +252,7 @@
             <button id="btnClearStage">clear</button>
             <input id="chkExportOutput" type="checkbox" checked/>export
             <div style="flex:1;"></div>
+            <button id="btnDownloadPicture">download snapshot</button>
             <button id="btnDownloadMovie">download record</button>
         </div>
         
@@ -295,15 +297,26 @@
 var self = this;
 var IDB = _IDB.exports;
 
+
 const AssetSpec = {
     name : "asset",
     releases : [{
-        version : 1,
+        version : 4,
         schema : {
             files : {
                 blob : {},
                 _meta : {
                     index : []
+                }
+            },
+            files_config : {
+                name : {unique:true},
+                fileid : {},
+                date : {},
+                type : {},
+                comments : {},
+                _meta : {
+                    index : ["name","date"]
                 }
             },
             files_meta : {
@@ -511,7 +524,130 @@ var default_video_layers = [{
     name : "top_subtitle", track :-1, lastTrack : -1,grid:[12,12],pos:[3,0],size:[6,2], style : Object.assign({},default_style)
 }];
 
-self.app.video.layers = default_video_layers;
+
+async function saveLayers() {
+    var used = [];
+    var lastKey = "";
+    const deep = (inObject,stack) => {
+        if(!stack) stack = [""];
+        let outObject, value, key
+        if (typeof inObject !== "object" || inObject === null) {
+            return inObject // Return the value if inObject is not an object
+        }
+
+        // Create an array or object to hold the values
+        outObject = Array.isArray(inObject) ? [] : {}
+        var find = false;
+        for(var x = 0; x < used.length;x++) {
+            if(used[x] == inObject) {
+                find = true;
+                break;
+            }
+        }
+        if(!find) { // do not copy circular.
+            used.push(inObject);
+            for (key in inObject) {
+                //console.log(key);
+                value = inObject[key]
+                // Recursively (deep) copy for nested objects, including arrays
+                lastKey = key;
+                stack.push(key);
+                outObject[key] = deep(value,stack)
+                stack.pop();
+            }
+        } else {
+            //console.log(lastKey,stack);
+        }
+        return outObject
+    }
+
+    var s = await IDB.service(AssetSpec);
+    var filename = "//user/layers";
+    var file_layers = await s.files_config.find("name",filename);
+    if(file_layers) {
+        var bw = new BinaryWriter();
+        var copy = deep(self.app.video.layers);
+        for(var x = 0; x < copy.length;x++) {
+            if("schema" in copy[x]) {
+                delete copy[x].schema;
+            }
+            if("track" in copy[x]) {
+                copy[x].track = -1;
+            }
+            if("lastTrack" in copy[x]) {
+                copy[x].lastTrack = -1;
+            }
+            if("update" in copy[x]) {
+                delete copy[x].update;
+            }
+            if("selected" in copy[x]) {
+                delete copy[x].selected;
+            }
+            if("init" in copy[x]) {
+                delete copy[x].init;
+            }
+            if("msSprite" in copy[x]) {
+                delete copy[x].msSprite;
+            }
+            if("changed" in copy[x].style) {
+                delete copy[x].style.changed;
+            }
+        }
+        console.log(copy);
+        var file = JSON.stringify(copy);
+        var file_ab = Binary.str2utf8ab(file);
+        bw.u32(file_ab.byteLength);
+        bw.add(file_ab);
+        await s.files.update(file_layers.fileid,bw.toBlob());
+    }
+}
+
+btnLayerChannelSaveAll.el.addEventListener("click",()=>{
+    saveLayers();
+});
+
+async function loadLayers() {
+    var s = await IDB.service(AssetSpec);
+    var filename = "//user/layers";
+    var file_layers = await s.files_config.find("name",filename);
+    if(!file_layers) {
+        // create
+        var bw = new BinaryWriter();
+        var file = JSON.stringify(default_video_layers);
+        var file_ab = Binary.str2utf8ab(file);
+        bw.u32(file_ab.byteLength);
+        bw.add(file_ab);
+        //console.log(await bw.toBlob().arrayBuffer());
+        var file_layer_id = await s.files.add(bw.toBlob());
+        //console.log(file_layer_id)
+        var meta = {
+            name: filename,
+            fileid : file_layer_id, 
+            type : "json",
+            date : (new Date()).toISOString(), 
+            comments : ""
+        };
+        //console.log(meta);
+        var meta_id = await s.files_config.add(meta);
+        return default_video_layers;
+    } else {
+        //console.log(file_layers.fileid);
+        var blob = await s.files.find(file_layers.fileid);
+        //console.log( blob );
+        var br = new BinaryReader(blob,await blob.arrayBuffer());
+        var size = br.u32();
+        var nblob = br.toBlob(size);
+        //console.log(nblob);
+        var str_json = Binary.utf8ab2str( await nblob.arrayBuffer(), size );
+        var layers = JSON.parse(str_json);
+        return layers;
+    }
+}
+self.app.video.layers = await loadLayers();
+for(var x = 0; x < self.app.video.layers.length;x++) {
+    self.app.video.layers[x].init = false;
+}
+
 self.app.video.layerSelected = null;
 async function add_layer(layer) {
     if(!layer.init) {
@@ -797,17 +933,29 @@ async function add_layer(layer) {
                 if(self.app.panel.layer.gridChange) {
                     txtLayerChannelGrid.el.removeEventListener("keyup",self.app.panel.layer.gridChange);
                 }
-                self.app.panel.layer.gridChange = ()=> { layer.grid = JSON.parse(txtLayerChannelGrid.el.value); }
+                self.app.panel.layer.gridChange = ()=> { 
+                    layer.grid = JSON.parse(txtLayerChannelGrid.el.value); 
+                    layer.update = true;
+                    //saveLayers();
+                }
                 txtLayerChannelGrid.el.addEventListener("keyup",self.app.panel.layer.gridChange);
                 if(self.app.panel.layer.posChange) {
                     txtLayerChannelPos.el.removeEventListener("keyup",self.app.panel.layer.posChange);
                 }
-                self.app.panel.layer.posChange = ()=> { layer.pos = JSON.parse(txtLayerChannelPos.el.value); }
+                self.app.panel.layer.posChange = ()=> { 
+                    layer.pos = JSON.parse(txtLayerChannelPos.el.value);
+                    layer.update = true;
+                    //saveLayers();
+                }
                 txtLayerChannelPos.el.addEventListener("keyup",self.app.panel.layer.posChange);
                 if(self.app.panel.layer.sizeChange) {
                     txtLayerChannelSize.el.removeEventListener("keyup",self.app.panel.layer.sizeChange);
                 }
-                self.app.panel.layer.sizeChange = ()=> { layer.size = JSON.parse(txtLayerChannelSize.el.value); }
+                self.app.panel.layer.sizeChange = ()=> { 
+                    layer.size = JSON.parse(txtLayerChannelSize.el.value); 
+                    layer.update = true;
+                    //saveLayers();
+                }
                 txtLayerChannelSize.el.addEventListener("keyup",self.app.panel.layer.sizeChange);
                 
                 // end bind
@@ -833,6 +981,7 @@ async function add_layer(layer) {
             schema.el.layer.style.backgroundColor = "";
             schema.el.layer.style.color = "";
         });
+        
     }
 }
 async function refresh_layerchannels() {
@@ -858,6 +1007,7 @@ btnAddLayerChannel.el.addEventListener("click",()=>{
     txtLayerChannelName.el.value = "";
     self.app.video.layers.push(config);
     console.log(config);
+    saveLayers();
 
     refresh_layerchannels();
 });
@@ -875,6 +1025,7 @@ btnRemoveLayerChannel.el.addEventListener("click",()=>{
         self.app.video.layerSelected.schema.$.layer.emit("dispose");
         self.app.video.layerSelected = null;
         console.log("remove");
+        saveLayers();
     }
 })
 
@@ -902,6 +1053,8 @@ btnFrontLayerChannel.el.addEventListener("click",async ()=>{
                     self.app.video.layerSelected.schema.el.layer.style.color = "white";
                     self.app.video.layerSelected.selected = true;
 
+                    //saveLayers();
+
                     // force repaint?
                     break;
                 }
@@ -927,6 +1080,9 @@ btnBackLayerChannel.el.addEventListener("click",async ()=>{
                     // reorder layers on view
 
                     layerChannelList.$.elementsClear();
+
+                    //saveLayers();
+
                     await refresh_layerchannels();
 
                     self.app.video.layerSelected.schema.el.layer.style.backgroundColor = "red";
@@ -966,13 +1122,17 @@ btnUpload.el.addEventListener("click",()=>{
 
         var s = await IDB.service(AssetSpec);
         var id = txtUploadFilename.el.value;
+        if(id.indexOf("//")==0) {
+            alert("can't contain // at beginning of filename.")
+            return;
+        }
         var fileMeta = await s.files_meta.find("name",id);
         
         if(!fileMeta) {
             // get blob of file
             var file_id = await s.files.add(blob);
             var meta_id = await s.files_meta.add({
-                name:id,
+                name: id,
                 fileid : file_id, 
                 date : (new Date()).toISOString(), 
                 comments : txtUploadDescription.el.value
@@ -997,7 +1157,7 @@ btnUpload.el.addEventListener("click",()=>{
 });
 
 async function refresh_list(update) {
-    console.log("refresh_list");
+    
     /*
     var data = null;
     if(update) {
@@ -1024,13 +1184,13 @@ async function refresh_list(update) {
     }
     */
     schema.$.list.elementsClear();
-    console.log("refresh_list before instanciating indexeddb. no calls for async return after IDB.service, lost async (0)");
+    //console.log("refresh_list before instanciating indexeddb. no calls for async return after IDB.service, lost async (0)");
     var s = await IDB.service(AssetSpec);
-    console.log("refresh_list before filter, lost async (1)");
+    //console.log("refresh_list before filter, lost async (1)");
     var list = await s.files_meta.filter((key,val)=> true);
-    console.log("refresh_list before filter, lost async (2)");
-    console.log(">>",list);
-    console.log("refresh_list",list);
+    //console.log("refresh_list before filter, lost async (2)");
+    
+    //console.log("refresh_list",list);
     for(var x = 0; x < list.length;x++) {
         addAsset2(list[x]);
     }
@@ -1112,7 +1272,6 @@ let audioStream0 = null;
 
 try {
     try {
-        console.log("init1");
         var stream0 = await navigator.mediaDevices.getUserMedia({audio:true});
         stream0.getTracks().forEach(function(track) {
             track.stop();
@@ -1125,8 +1284,6 @@ try {
             track.stop();
         });
     } catch(e) {}
-
-    console.log("init2");
     navigator.mediaDevices.enumerateDevices()
     .then(gotDevices)
     .catch((error)=>{
@@ -1251,7 +1408,7 @@ btnAddAudioFile.el.addEventListener("click",async ()=>{
             };
             fileAudio.el.value = "";
             self.app.tracks.push(track);
-            console.log(track);
+            //console.log(track);
             self.app.events.emit("updateTracks");
         }
         reader.readAsArrayBuffer(file);
@@ -1286,7 +1443,7 @@ btnAddImageVideoFile.el.addEventListener("click",async ()=>{
                 };
                 fileImage.el.value = "";
                 self.app.tracks.push(track);
-                console.log(track);
+                //console.log(track);
                 self.app.events.emit("updateTracks");
             } else {
                 type = file.type.indexOf("video/") != -1 ? "video" : null;
@@ -1310,7 +1467,7 @@ btnAddImageVideoFile.el.addEventListener("click",async ()=>{
                     };
                     video.play();
                     self.app.tracks.push(track);
-                    console.log(track);
+                    //console.log(track);
                     self.app.events.emit("updateTracks");
                 } else {
                     var ext = "";
@@ -1400,7 +1557,7 @@ btnAddCamera.el.addEventListener("click",async ()=>{
     };
     cameraNb++;
     self.app.tracks.push(track);
-    console.log(track);
+    //console.log(track);
     self.app.events.emit("updateTracks");
 });
 
@@ -1464,7 +1621,7 @@ btnAddScreen.el.addEventListener("click",async ()=>{
     };
     screenNb++;
     self.app.tracks.push(track);
-    console.log(track);
+    //console.log(track);
     self.app.events.emit("updateTracks");
 
 });
@@ -1523,7 +1680,7 @@ btnAddRecorderTab.el.addEventListener("click",()=>{
     };
     tabNb++;
     self.app.tracks.push(track);
-    console.log(track);
+    //console.log(track);
     self.app.events.emit("updateTracks");
 
 });
@@ -1558,7 +1715,7 @@ function toggleRecording() {
 function handleDataAvailable(event) {
     
     if (event.data && event.data.size > 0) {
-        console.log("DATA",event.data);
+        //console.log("DATA",event.data);
         recordedBlobs.push(event.data);
     } else {
         //console.log( mediaRecorder.requestData() );
@@ -1577,25 +1734,37 @@ async function handleStop(event) {
         console.log("removing tracks");
         stream.removeTrack(self.app.audio.recordTracks[x]);
     }
-    if(self.app.video.mode == "none") {
-        const superBuffer = new Blob(recordedBlobs, {type: 'audio/webm'});
-        var url = (window.URL || window.webkitURL).createObjectURL(superBuffer);
-        var schema = await playaudio.$.elementSetPacketAsync(`
-            <audio id="audio" controls>
-                <source src="`+url+`" type="audio/webm">
-                Your browser does not support the audio tag.
-            </audio>
-        `);
-        self.app.audio.control = schema.el.audio;
+
+    var duration = Date.now() - self.app.start;
+    // convert recorded blobs and save with duration.
+    var buggyBlob = new Blob(recordedBlobs, { type: 'video/webm' });
+
+    ysFixWebmDuration(buggyBlob, duration, async function(fixedBlob) {
+
+        recordedBlobs = [fixedBlob];
+        if(self.app.video.mode == "none") {
+            const superBuffer = new Blob(recordedBlobs, {type: 'audio/webm'});
+            var url = (window.URL || window.webkitURL).createObjectURL(superBuffer);
+            var schema = await playaudio.$.elementSetPacketAsync(`
+                <audio id="audio" controls>
+                    <source src="`+url+`" type="audio/webm">
+                    Your browser does not support the audio tag.
+                </audio>
+            `);
+            self.app.audio.control = schema.el.audio;
+            
+            delete self.app.events.hitTrack;
+        } else {
+            const superBuffer = new Blob(recordedBlobs, {type: 'video/webm'});
+            playscreen.el.src = window.URL.createObjectURL(superBuffer);
+            
+        }
         
-        delete self.app.events.hitTrack;
-    } else {
-        const superBuffer = new Blob(recordedBlobs, {type: 'video/webm'});
-        playscreen.el.src = window.URL.createObjectURL(superBuffer);
-        
-    }
+        self.app.recordState = "stopped";
+
+    });
+
     
-    self.app.recordState = "stopped";
 }
 
 
@@ -1607,6 +1776,8 @@ async function startRecording() { // take 'stream' to MediaRecorder, to setup st
         throw new Error("(you must select some input device)");
         return;
     }
+
+    self.app.start = Date.now();
 
     recordHolder.el.style.display = "";
     recordedBlobs = [];
@@ -1638,7 +1809,7 @@ async function startRecording() { // take 'stream' to MediaRecorder, to setup st
                 playback.connect(playbackGain);
                 playbackGain.gain.value = 0.5;
                 playbackGain.connect(audioMixer);
-                playback.connect(audioCtx.destination);
+                //playback.connect(audioCtx.destination);
                 playback.start();
             }
             console.log("hit",self.app.tracks[n]);
@@ -1795,6 +1966,9 @@ async function download() {
             blob = new Blob(recordedBlobs, {type: 'video/webm'});
             type = "video.webm";
         }
+
+        
+
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.style.display = 'none';
@@ -1826,6 +2000,7 @@ btnPlay.el.addEventListener("click",()=>{
     }
 });
 btnDownloadMovie.el.addEventListener("click",()=>{ download(); });
+
 
 async function makeNcpBlob(blobs) {
     var blob,type;
@@ -1868,6 +2043,10 @@ btnSend.el.addEventListener("click",async ()=>{
     //var nblob = await makeNcpBlob(recordedBlobs);
     var s = await IDB.service(AssetSpec);
     var id = txtSaveFileName.el.value;
+    if(id.indexOf("//")==0) {
+        alert("can't contain // at beginning of filename.")
+        return;
+    }
     var fileMeta = await s.files_meta.find("name",id);
     var blob,type;
     if(!fileMeta) {
@@ -1925,8 +2104,6 @@ window.addEventListener("keyup",(e)=>{
     } else if(e.keyCode == 40) {
     }
 
-    
-
     if(e.keyCode == 16) {
         keyboard.shift = false;
     }
@@ -1960,6 +2137,7 @@ self.app.events.on("updateTracks",async ()=>{
                             console.log("clip");
                             track.data.el.currentTime= 0;
                             track.data.el.play();
+
                             var f = ()=>{
                                 track.data.running = false;
                                 sellayer.lastTrack = -1; // loop clip
@@ -2006,6 +2184,7 @@ self.app.events.on("updateTracks",async ()=>{
                             sellayer.msSprite = null;
                         }
                         sellayer.msSprite = new PIXI.Text(track.data.value, style);
+                        
                         sellayer.msSprite.x = sellayer.pos[0]*resize[0];
                         sellayer.msSprite.y = sellayer.pos[1]*resize[1];
                         sellayer.msSprite.width = resize[0]*sellayer.size[0];
@@ -2122,7 +2301,9 @@ self.app.events.on("updateTracks",async ()=>{
                             sellayer.msSprite.destroy();
                             sellayer.msSprite = null;
                         }
+                        console.log(sellayer.name);
                         sellayer.msSprite = new PIXI.Sprite(texture);
+                        
                         sellayer.msSprite.x = sellayer.pos[0]*resize[0];
                         sellayer.msSprite.y = sellayer.pos[1]*resize[1];
                         sellayer.msSprite.width = resize[0]*sellayer.size[0];
@@ -2151,7 +2332,6 @@ self.app.events.on("updateTracks",async ()=>{
     }
     var layerButtons = [];
     for(var x = 0; x < self.app.video.layers.length;x++) {
-        console.log("layer buttons ",x);
         var layer = self.app.video.layers[x];
         layerButtons.push(`<div style="padding-left:5px;padding-right:5px;"><button id="btnLayer_${x}">${layer.name}</button></div>`);
         setLayerChangeHandler(layer,x);
@@ -2161,7 +2341,7 @@ self.app.events.on("updateTracks",async ()=>{
     // layers may change
     async function addTrack(n,track) {
         if(!track.loaded) {
-            console.log(track);
+            
             if(!track) {
                 throw new Error("no track; n=",n);
             }
@@ -2401,19 +2581,18 @@ self.app.events.on("updateTracks",async ()=>{
                     function setHandler(schema,layer,x) {
                         schema.el["btnLayer_" + x].addEventListener("click",()=>{ // works like any pip layer
                             layer.update = true;
-                            console.log("click");
                             var found = false;
                             var sel_remove = [];
                             for(var y = 0; y < track.data.live.length;y++) {
                                 if(track.data.live[y].name == layer.name) {
                                     found = true;
                                     if(layer.track == n) { // on/off track
-                                        console.log("off n:",n);
+                                        //console.log("off n:",n);
                                         layer.lastTrack = layer.track;
                                         layer.track = -1;
                                         sel_remove.push(y);
                                     } else {
-                                        console.log("on");
+                                        //console.log("on");
                                         layer.lastTrack = layer.track;
                                         layer.track = n;
                                     }
@@ -2424,7 +2603,7 @@ self.app.events.on("updateTracks",async ()=>{
                                 track.data.live.splice(sel_remove[y],1);
                             }
                             if(!found) {
-                                console.log("on 1");
+                                //console.log("on 1");
                                 track.data.live.push({name : layer.name });
                                 layer.lastTrack = layer.track;
                                 layer.track = n;
@@ -2452,7 +2631,7 @@ self.app.events.on("updateTracks",async ()=>{
 
     if(self.app.hasVideoTracks() && !self.app.video.output.init) {
         self.app.video.output.init = true;
-        console.log("INIT VIDEO",self.app.hasVideoTracks(), self.app.video.output.init);
+        //console.log("INIT VIDEO",self.app.hasVideoTracks(), self.app.video.output.init);
         recordHolder.el.style.display = "";
         var schema = await camera_holder.$.elementSetPacketAsync(`
             <div id="mockWidth"></div>
@@ -2463,12 +2642,18 @@ self.app.events.on("updateTracks",async ()=>{
         var videoOutputSize = [parseInt(screenWidth.el.value),parseInt(screenHeight.el.value)];
         schema.el.videoOutput.setAttribute("width",videoOutputSize[0]);
         schema.el.videoOutput.setAttribute("height",videoOutputSize[1]);
+        schema.el.videoOutput.style.backgroundColor = "black";
 
         schema.el.videoOutputCopy.setAttribute("width",videoOutputSize[0]);
         schema.el.videoOutputCopy.setAttribute("height",videoOutputSize[1]);
 
         if(videoOutputSize[0] < schema.el.mockWidth.offsetWidth) {
-            schema.el.videoOutput.style.width = videoOutputSize[0] + 'px';
+            if(videoOutputSize[1] > 480) {
+                schema.el.videoOutput.style.height = '480px';
+            } else {
+                schema.el.videoOutput.style.width = videoOutputSize[0] + 'px';
+            }
+            
         } else {
             schema.el.videoOutput.style.width = "100%";
         }
@@ -2479,6 +2664,30 @@ self.app.events.on("updateTracks",async ()=>{
             view : schema.el.videoOutput
         });
 
+        //var filter = new PIXI.filters.GodrayFilter();
+        //console.log("FILTER",filter);
+        //self.app.video.pixi.stage.filters = [filter];
+
+
+        if(self.app.video.output.snapshot) {
+            btnDownloadPicture.el.removeEventListener("click",self.app.video.output.snapshot);
+        }
+        self.app.video.output.snapshot = ()=>{
+            const a = document.createElement('a');
+            var url = self.app.video.pixi.renderer.plugins.extract.base64(	self.app.video.pixi.stage,"image/png");
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'snapshot.png';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 10000);
+        };
+        btnDownloadPicture.el.addEventListener("click",self.app.video.output.snapshot);
+
+
         self.app.video.canvasFlag = true;
         var lastTrack = -1;
         
@@ -2487,7 +2696,7 @@ self.app.events.on("updateTracks",async ()=>{
             if(!self.app.video.canvasFlag) return;
 
             if(first) {
-                console.log("output loop");
+                //console.log("output loop");
                 first = false;
             }
             var msChanged = false;
@@ -2508,19 +2717,23 @@ self.app.events.on("updateTracks",async ()=>{
         };
         self.app.video.outputLoop();
         self.app.stream = stream = schema.el.videoOutput.captureStream(60);
-        schema.el.mockimg.srcObject = stream;
-        schema.el.mockimg.play();
+        //schema.el.mockimg.srcObject = stream;
+        //schema.el.mockimg.play();
+        /*
         setInterval(async ()=>{
             if(chkExportOutput.el.checked) {
                 const ctx = schema.el.videoOutputCopy.getContext('2d');
                 ctx.clearRect(0, 0, videoOutputSize[0],videoOutputSize[1]);
                 ctx.drawImage(schema.el.mockimg,0,0);
+                //self.app.video.pixi.renderer.plugins.extract.canvas(self.app.video.pixi.stage).toBlob(function(blob) {
+                  //  self.app.channel.postMessage({type:"stream",id:self.app.id,data:blob});
+                //});
                 schema.el.videoOutputCopy.toBlob(function(blob) {
                     self.app.channel.postMessage({type:"stream",id:self.app.id,data:blob});
                 });
             }
-        },1000/24);
-        
+        },1000/30);
+        */
         self.app.video.mode = "play";
 
     } 
@@ -2704,7 +2917,7 @@ async function addAsset(item) {
                 };
                 self.app.tracks.push(track);
                 self.app.events.emit("updateTracks");
-                console.log(track);
+                //console.log(track);
             } else if(this.spec.type == "video.webm") {
 
                 var sz2 = br.u32();
@@ -2729,7 +2942,7 @@ async function addAsset(item) {
                 clipNb++;
                 self.app.tracks.push(track);
                 self.app.events.emit("updateTracks");
-                console.log(track);
+                //console.log(track);
             }
             // end bound
         }
