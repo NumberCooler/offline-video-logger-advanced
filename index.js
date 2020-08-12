@@ -5,6 +5,8 @@ var config = require(path.resolve(__dirname,'config.js'));
 const request = require('request');
 const mysql = require('mysql2');
 const app = express();
+
+app.use('/js/control/monaco',express.static('./node_modules/monaco-editor'));
 app.use("/",express.static('./public'));
 var update = false;
 var has_cache = false;

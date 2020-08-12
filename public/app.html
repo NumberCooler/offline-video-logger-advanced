@@ -86,6 +86,14 @@
     <div style="width:5px;background-color:navy;"></div>
     <div id="mainPanel" style="flex:1;padding:20px;overflow:auto;">
         <ul>
+            <li>layer: alpha, mask, rotation, chroma key, filter stack + dialog to save/load/edit, script (break into many layers)</li>
+            <li>save/load html (render,script)</li>
+            <li>pre cache images -> html, preload models -> webgl, preload youtube/vimeo clip (serverside)</li>
+            <li>script track interface -> UI</li>
+            <li>scene track</li>
+            <li>offscreen three.js track</li>
+            <li>offscreen pixi track</li>
+            <li>t2s audio track (server side)</li>
             <li>stream channel admin : transitions, queue(each item on queue is a keyframe) aka keyframe manager, schedule, script and priorities, place buttons that trigger scripts at recording time with mouse tracking the click. maybe on premium2.</li>
             <li>db (add full text search, including video text and link to that point in video)</li>    
             <li>positioning layers with mouse (snaped)</li>
@@ -115,7 +123,9 @@
                                         </div>
                                     </div>
                                     <div style="font-weight:bold;font-size:10px;padding-left:10px;">
-                                        <div>(4:3)</div>
+                                        <div>(4:3)
+
+                                        </div>
                                         <div style="display:flex;padding-left:10px;">
                                             <div id="btnResQVGA" style="margin-right:10px;">QVGA</div>
                                             <div id="btnResVGA" style="margin-right:10px;">VGA</div>
@@ -1596,6 +1606,8 @@ btnSetScreen.el.addEventListener("click",async ()=>{
 */
 var screenNb = 0;
 btnAddScreen.el.addEventListener("click",async ()=>{
+
+    
     const constraints = { video : true };
     var videoel = document.createElement("video");
     var stream = null;
@@ -1606,6 +1618,7 @@ btnAddScreen.el.addEventListener("click",async ()=>{
     } else {
         stream = videoel.srcObject = await navigator.mediaDevices.getUserMedia({video: {mediaSource: 'screen'}});
     }
+    console.log(stream);
     videoel.play();
 
     var track = {
@@ -2452,38 +2465,53 @@ self.app.events.on("updateTracks",async ()=>{
                         <div style="display:flex;">
                             <div style="padding-left:5px;padding-right:5px;">🔊 ${(""+n).padStart(2,"0")}</div>
                             <div style="padding-left:5px;padding-right:5px;width:100px;overflow:hidden;white-space: nowrap;">${track.data.name}</div>
-                            
                             ${layerButtons}
-                            
                         </div>
                         <div style="display:flex;">
-                            <div id="renderTarget" style="display:none;">
+                            <div id="renderTarget">
                                 renderTarget:<br/>
-                                <textarea id="txtValue" style="width:320px;height:240px;font-size:10px;"></textarea>
+                                <div id="editorRender" style="position:relative;width:${parseInt(window.innerWidth*(1-0.285714285714)-100)/2}px;height:240px;"></div>
                             </div>
                             <div>
                                 code:<br/>
-                                <textarea id="txtScript" style="width:320px;height:240px;font-size:10px;"></textarea>
+                                <div id="editorScript" style="position:relative;width:${parseInt(window.innerWidth*(1-0.285714285714)-100)/2}px;height:240px;"></div>
                             </div>
                         </div>
                         <div><button id="btnRun">run</button><button id="btnToogleRender">show render</button></div>
                     `);
+                    if(!self.app.monaco) {
+                        await new Promise((resolve,reject)=>{
+                            require(['vs/editor/editor.main'], function() {
+                                
+                                resolve();
+                            });
+                        });
+                        self.app.monaco = true;
+                    } else {
+                        //alert("cache");
+                    }
+                    var editorRender = monaco.editor.create(schema.el.editorRender, {
+                        value: "",
+                        language: "html"
+                    });
+                    var editorScript = monaco.editor.create(schema.el.editorScript, {
+                        value: "",
+                        language: "javascript"
+                    });
+                    schema.el.renderTarget.style.display = "none";
+
                     function updateSources() {
                         for(var x = 0; x < track.data.live.length;x++) {
                             var item_layer = track.data.live[x];
                             for(var y = 0; y < self.app.video.layers.length;y++) {
                                 if(self.app.video.layers[y].name == item_layer.name) {
-                                    //console.log("UPDATE HTML");
                                     self.app.video.layers[y].update = true;
                                 }
                             }
                         }
                     }
-                    schema.el.txtValue.addEventListener("change",()=>{
-                        track.data.value = schema.el.txtValue.value;
-                    });
-                    schema.el.txtValue.addEventListener("keyup",(e)=>{
-                        track.data.value = schema.el.txtValue.value;
+                    editorRender.onDidChangeModelContent(function (e) {
+                        track.data.value = editorRender.getValue();
                         updateSources();
                     });
                     var renderVisible = false;
@@ -2517,7 +2545,7 @@ self.app.events.on("updateTracks",async ()=>{
                             }
                             function target (src) {
                                 console.log("TARGET");
-                                schema.el.txtValue.value = src;
+                                editorRender.setValue(src);
                                 track.data.value = src;
                                 updateSources();
                             }
@@ -2526,7 +2554,8 @@ self.app.events.on("updateTracks",async ()=>{
                             let schema = null;
                             let track = null;
 `;
-                        code += schema.el.txtScript.value;
+
+                        code += editorScript.getValue();//schema.el.txtScript.value;
                         code += "}";
                         console.log("EVAL",code);
                         eval(code);
